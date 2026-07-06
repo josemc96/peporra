@@ -22,8 +22,11 @@ peporra/
       /controllers
       /routes
       /middleware
-      /services       ← footballApi.service.ts (llamadas a la API externa)
-      /jobs           ← cron de sincronización de partidos y cálculo de puntos
+      /services
+        /rules        ← motor de reglas: evaluadores, registro, resolveActiveRules, resolveMultiplier
+        footballApi.service.ts (llamadas a la API externa, pendiente)
+      /jobs           ← cron de sincronización de partidos y cálculo de puntos (pendiente)
+      /scripts        ← seedRules.ts (siembra el catálogo Rule en Mongo)
       /types
       app.ts
       server.ts
@@ -36,7 +39,7 @@ peporra/
   README.md
 ```
 
-Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (tsc → dist/), `npm start` (node dist/server.js), `npm run typecheck` (tsc --noEmit).
+Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (tsc → dist/), `npm start` (node dist/server.js), `npm run typecheck` (tsc --noEmit), `npm run seed:rules` (siembra el catálogo `Rule`).
 
 ## API externa de partidos
 - **football-data.org** (free tier) — cubre La Liga, calendario, resultados y horarios.
@@ -155,7 +158,11 @@ peña puede querer puntuaciones distintas.
 - [x] Modelos Mongoose (User, Group, Match, Rule, GroupRuleSettings, Prediction, PredictionScore,
       StandingsPrediction, StandingsPredictionScore, AwardPrediction, AwardPredictionScore,
       ScoreMultiplier, QualifierPrediction, QualifierPredictionScore)
-- [ ] Motor de reglas (evaluadores por `key` en `src/services/rules/`)
+- [x] Motor de reglas (`src/services/rules/`): evaluadores puros por `key` (exact_score, correct_sign,
+      standings_position, pichichi_correct, zamora_correct, knockout_qualifier), registro
+      (`registry.ts`), `resolveActiveRules` y `resolveMultiplier`. Catálogo `Rule` sembrado en
+      Atlas vía `npm run seed:rules`. Falta integrarlo en los jobs de cálculo de puntos (aún no
+      creados) y en endpoints admin para gestionar `GroupRuleSettings`/`ScoreMultiplier`.
 - [ ] Auth (registro/login JWT con refresh tokens)
 - [ ] Grupos: crear, unirse por inviteCode, generar GroupRuleSettings inicial
 - [ ] Sincronización de partidos desde football-data.org (cron)
