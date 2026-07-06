@@ -1,0 +1,43 @@
+@baseUrl = http://127.0.0.1:4000
+@email = test@peporra.com
+@password = password123
+
+### Health check
+GET {{baseUrl}}/health
+
+### Registro
+# @name register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "alias": "TestUser"
+}
+
+### Login
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Mi perfil (usa el accessToken de la respuesta de login/register de arriba)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Refrescar access token
+POST {{baseUrl}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{login.response.body.refreshToken}}"
+}
+
+### Logout (invalida los refresh tokens emitidos)
+POST {{baseUrl}}/api/auth/logout
+Authorization: Bearer {{login.response.body.accessToken}}

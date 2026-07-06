@@ -9,7 +9,7 @@ No es una app web — se instala desde store (React Native / Expo).
 - **Frontend**: Expo (React Native) — el usuario viene de MERN/React web, así que reutiliza conocimientos de React/hooks pero compila a app nativa iOS/Android
 - **Backend**: Node.js + Express 5 + MongoDB (Mongoose) — TypeScript, ejecutado en dev con `tsx watch` y compilado con `tsc` para producción
 - **Base de datos**: MongoDB Atlas, plan free (M0), cluster en región Paris (eu-west-3)
-- **Auth**: JWT (access + refresh tokens) — pendiente de implementar
+- **Auth**: JWT (access + refresh tokens) — implementado, ver sección "Autenticación" más abajo
 - **Repo**: monorepo en GitHub → https://github.com/josemc96/peporra.git
 
 ## Estructura del monorepo
@@ -19,15 +19,17 @@ peporra/
     /src
       /config         ← env.ts, db.ts
       /models
-      /controllers
-      /routes
-      /middleware
+      /controllers    ← auth.controller.ts
+      /routes         ← auth.routes.ts
+      /middleware     ← auth.middleware.ts (requireAuth/requireAdmin), errorHandler.ts
       /services
+        /auth         ← password.service.ts (bcrypt), token.service.ts (JWT), types.ts
         /rules        ← motor de reglas: evaluadores, registro, resolveActiveRules, resolveMultiplier
         footballApi.service.ts (llamadas a la API externa, pendiente)
       /jobs           ← cron de sincronización de partidos y cálculo de puntos (pendiente)
       /scripts        ← seedRules.ts (siembra el catálogo Rule en Mongo)
-      /types
+      /utils          ← AppError.ts
+      /types          ← enums.ts, express.d.ts (augmenta Request.user)
       app.ts
       server.ts
     tsconfig.json
@@ -46,6 +48,19 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
   Límite: 10 peticiones/min, así que los partidos se sincronizan a la BD propia
   (no se llama a la API en cada request de usuario).
 - Alternativa si se necesita más adelante (cuotas, stats avanzadas): API-Football (api-sports.io)
+
+## Autenticación (JWT)
+- `POST /api/auth/register`, `/login`, `/refresh`, `/logout` (protegido), `GET /api/auth/me` (protegido)
+- Access token corto (`JWT_ACCESS_EXPIRES_IN`, 15m) firmado con `JWT_SECRET`; refresh token largo
+  (`JWT_REFRESH_EXPIRES_IN`, 30d) firmado con `JWT_REFRESH_SECRET`. Ambos JWT sin estado (no se
+  guardan en BD) — se validan por firma + expiración.
+- `User.tokenVersion` (número, empieza en 0): el refresh token incluye el `tokenVersion` con el
+  que se emitió; `logout` incrementa el contador, invalidando de golpe todos los refresh tokens
+  ya emitidos para ese usuario (no hay tabla de tokens revocados ni rotación por token individual).
+- `requireAuth` (middleware): exige `Authorization: Bearer <accessToken>`, cuelga `req.user =
+  { id, role }` (tipo aumentado en `types/express.d.ts`). `requireAdmin`: exige `role === 'admin'`.
+- Errores de negocio se lanzan como `AppError(message, statusCode)` y los captura
+  `middleware/errorHandler.ts` (Express 5 reenvía rechazos de async handlers automáticamente).
 
 ## Modelos de datos (MongoDB / Mongoose, TypeScript)
 
@@ -163,7 +178,9 @@ peña puede querer puntuaciones distintas.
       (`registry.ts`), `resolveActiveRules` y `resolveMultiplier`. Catálogo `Rule` sembrado en
       Atlas vía `npm run seed:rules`. Falta integrarlo en los jobs de cálculo de puntos (aún no
       creados) y en endpoints admin para gestionar `GroupRuleSettings`/`ScoreMultiplier`.
-- [ ] Auth (registro/login JWT con refresh tokens)
+- [x] Auth (registro/login JWT con refresh tokens): `/api/auth/register|login|refresh|logout|me`,
+      `requireAuth`/`requireAdmin`, `User.tokenVersion` para invalidar refresh tokens en logout,
+      `AppError` + `errorHandler` centralizado. Probado end-to-end contra el servidor real.
 - [ ] Grupos: crear, unirse por inviteCode, generar GroupRuleSettings inicial
 - [ ] Sincronización de partidos desde football-data.org (cron)
 - [ ] Endpoints de predicciones de partido (crear, listar, bloqueo por fecha)
