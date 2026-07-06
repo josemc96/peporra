@@ -12,6 +12,7 @@ export interface IMatch extends Document {
   homeScore?: number;
   awayScore?: number;
   status: MatchStatus;
+  externalId?: number;
 }
 
 const matchSchema = new Schema<IMatch>({
@@ -30,6 +31,9 @@ const matchSchema = new Schema<IMatch>({
   homeScore: { type: Number },
   awayScore: { type: Number },
   status: { type: String, enum: ['pending', 'finished'], default: 'pending' },
+  // id del partido en football-data.org — permite upsert fiable al sincronizar (los
+  // partidos de Copa del Rey/Supercopa, dados de alta a mano, no tienen externalId.
+  externalId: { type: Number, unique: true, sparse: true },
 });
 
 matchSchema.index({ season: 1, matchday: 1 });
