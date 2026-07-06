@@ -19,4 +19,5 @@ export const env = {
   jwtAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN ?? '15m',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '30d',
   footballApiKey: process.env.FOOTBALL_API_KEY ?? '',
+  currentSeason: process.env.CURRENT_SEASON ?? '2026-2027',
 };
