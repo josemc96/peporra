@@ -44,91 +44,104 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
   (no se llama a la API en cada request de usuario).
 - Alternativa si se necesita más adelante (cuotas, stats avanzadas): API-Football (api-sports.io)
 
-## Modelos de datos (MongoDB / Mongoose)
+## Modelos de datos (MongoDB / Mongoose, TypeScript)
+
+Implementados en `backend/src/models/` (interfaz `IX` + `Schema<IX>` + `model<IX>`).
+Enums compartidos en `backend/src/types/enums.ts`.
 
 ### User
-- email, password (hasheada con bcrypt), nombre/alias visible, avatar opcional, fecha de registro
-- Roles: usuario normal vs admin
+- email, password (hasheada con bcrypt), alias, avatarUrl opcional, role (`user`/`admin`), createdAt
 
 ### Group (peñas)
-```js
-{
-  name: String,
-  inviteCode: String,        // código único para unirse (tipo nanoid)
-  admin: ObjectId(User),
-  members: [ObjectId(User)],
-  season: String,             // "2026-2027"
-  createdAt: Date
-}
-```
-- Un usuario puede pertenecer a varios grupos
-- El ranking se calcula filtrando por grupo, no solo global
+- name, inviteCode (único, tipo nanoid), admin (ref User), members (ref User[]), season, createdAt
+- Un usuario puede pertenecer a varios grupos; el ranking se calcula filtrando por grupo
 
 ### Match
-- Jornada, equipos, fecha/hora, resultado, estado (pending/finished)
-- Se sincroniza vía cron desde football-data.org
+- season, competition (`la_liga`/`copa_del_rey`/`supercopa`, default `la_liga`), matchday
+  (opcional, solo aplica a `la_liga`), isKnockout (Boolean), homeTeam, awayTeam, startTime,
+  homeScore/awayScore opcionales, status (`pending`/`finished`)
+- Se sincroniza vía cron desde football-data.org (solo La Liga; Copa del Rey/Supercopa se
+  crean/gestionan aparte, sin API — pendiente de detallar cuando se implementen)
+- `isKnockout = true` en la final de Copa del Rey y en los partidos de Supercopa: si acaban
+  empatados a los 90' (sin prórroga/penaltis), hay una predicción adicional de quién se clasifica
 
-### Prediction (predicción de partido)
-```js
-{
-  user: ObjectId(User),
-  match: ObjectId(Match),
-  predictedHome: Number,
-  predictedAway: Number,
-  points: Number,        // calculado al terminar el partido
-  status: 'pending' | 'scored'
-}
-```
-- Se bloquea el envío de predicción cuando `now >= match.startTime`
+### Rule (catálogo global de tipos de regla)
+- key (único), scope (`match` \| `standings` \| `award` \| `knockout`), name, description, defaultPoints
+- Cada `key` tiene su lógica de evaluación programada en `backend/src/services/rules/` (pendiente).
+  Añadir un tipo de regla realmente nuevo requiere un desarrollador (evaluador de código);
+  activarla/desactivarla y ajustar sus puntos por peña es cosa del admin, sin tocar código.
+- `knockout_qualifier` (scope `knockout`, defaultPoints 2): acertar quién se clasifica cuando
+  un partido `isKnockout` termina empatado a los 90'. Solo se puntúa si de verdad hubo empate.
 
-### StandingsPrediction (predicción de clasificación)
-```js
-{
-  user: ObjectId(User),
-  season: String,
-  phase: 'ida' | 'vuelta',   // jornada 19 o jornada 38
-  predictedTable: [{ position: Number, team: String }],
-  points: Number,
-  status: 'pending' | 'scored'
-}
-```
-- Se predice ANTES de que empiece la temporada
-- Se bloquea antes de la jornada 1
+### GroupRuleSettings (configuración de reglas por peña y temporada)
+- group, season, rules: `[{ rule: ObjectId(Rule), points: Number, active: Boolean }]`,
+  enabledCompetitions: `('copa_del_rey' | 'supercopa')[]`
+- Único por `(group, season)`. Panel de admin edita este documento.
+- `enabledCompetitions` (vacío por defecto): el admin decide si su peña juega con Copa del Rey
+  y/o Supercopa de España — opt-in explícito, no vienen activadas por defecto.
 
-## Sistema de puntuación (DEFINITIVO)
+### Prediction (datos crudos de la predicción de partido)
+- user, match, predictedHome, predictedAway, status (`pending`/`scored`)
+- Único por `(user, match)`. Se bloquea el envío cuando `now >= match.startTime`
+- **Ya no tiene `points` propio** — los puntos dependen de la peña (ver `PredictionScore`)
 
-### Partidos
-- **1 punto** por acertar el signo (victoria local, empate o victoria visitante)
-- **3 puntos** por acertar el resultado exacto
+### PredictionScore (puntos de una predicción, por peña)
+- prediction, group, points, ruleBreakdown (`[{ rule, points }]`), multiplierApplied opcional
+- Único por `(prediction, group)`. Generado por el job de puntuación por lote.
 
-```js
-function calculatePoints(predHome, predAway, realHome, realAway) {
-  const predResult = Math.sign(predHome - predAway);
-  const realResult = Math.sign(realHome - realAway);
+### StandingsPrediction (datos crudos de la predicción de clasificación)
+- user, season, phase (`ida`=jornada 19 / `vuelta`=jornada 38), predictedTable (`[{ position, team }]`), status
+- Único por `(user, season, phase)`. Se predice antes de que empiece la temporada;
+  **el bloqueo por fecha es fijo (no configurable por el admin)**
 
-  if (predHome === realHome && predAway === realAway) return 3; // resultado exacto
-  if (predResult === realResult) return 1;                       // acierta signo
-  return 0;
-}
-```
+### StandingsPredictionScore (puntos de clasificación, por peña)
+- standingsPrediction, group, points, ruleBreakdown. Único por `(standingsPrediction, group)`
 
-### Clasificación (ida/vuelta)
-- **2 puntos** por cada posición exacta acertada en la tabla predicha, tanto en la de la ida
-  (jornada 19) como en la de la vuelta (jornada 38) — son dos tablas independientes
+### AwardPrediction (predicción de Pichichi / Zamora)
+- user, season, award (`pichichi`/`zamora`), predictedPlayer, status
+- Único por `(user, season, award)`. Se bloquea antes de jornada 1.
+- El resultado real se introduce manualmente por el admin al terminar la temporada
+  (la API gratuita no lo da fiable)
 
-```js
-function calculateStandingsPoints(predictedTable, realTable) {
-  let points = 0;
-  predictedTable.forEach(pred => {
-    const real = realTable.find(r => r.team === pred.team);
-    if (real && real.position === pred.position) points += 2;
-  });
-  return points;
-}
-```
+### AwardPredictionScore (puntos de Pichichi/Zamora, por peña)
+- awardPrediction, group, points. Único por `(awardPrediction, group)`
+- Pichichi y Zamora tienen puntuaciones **independientes** configurables por el admin
 
-- El cálculo de puntos de partidos se hace por lote (job/cron), no en tiempo real:
-  revisa partidos `finished` sin puntuar y recorre sus `Prediction` pendientes.
+### ScoreMultiplier (multiplicador manual x2/x3/xN)
+- group, season, scope (`match` \| `matchday`), match u opcional matchday, multiplier (≥1)
+- Decisión puntual y externa del grupo sobre un partido concreto o una jornada entera.
+  No es una "regla" del catálogo — es un modificador aplicado al puntuar.
+  Precedencia: si hay multiplicador de `match` para ese partido, se usa ese; si no, se
+  busca uno de `matchday` para su jornada.
+
+## Sistema de puntuación (CONFIGURABLE POR PEÑA)
+
+El sistema fijo original (`calculatePoints`/`calculateStandingsPoints` con valores hardcodeados)
+se sustituyó por un motor de reglas configurable, porque las reglas siguen en debate y cada
+peña puede querer puntuaciones distintas.
+
+- **Catálogo de reglas** (`Rule`): cada tipo de regla (acertar signo, resultado exacto, posición
+  en tabla, Pichichi, Zamora...) tiene una clave (`key`) con su evaluador en código.
+- **Configuración por peña** (`GroupRuleSettings`): el admin de cada peña decide, por temporada,
+  qué reglas están activas y con cuántos puntos vale cada una.
+- **Multiplicadores** (`ScoreMultiplier`): el admin puede aplicar x2/x3/xN a un partido concreto
+  (incluidos partidos de Copa del Rey/Supercopa) o a una jornada entera, decidido externamente
+  por el grupo. Se aplica tanto a `PredictionScore` como a `QualifierPredictionScore`.
+- **Cálculo por lote, no en tiempo real**: jobs (`backend/src/jobs/`, pendientes) recorren
+  partidos `finished`/fases cerradas/premios confirmados, y generan `PredictionScore`,
+  `StandingsPredictionScore`, `AwardPredictionScore` y `QualifierPredictionScore` por cada
+  peña del usuario, aplicando las reglas activas de esa peña y el multiplicador si corresponde.
+- **Ranking por peña**: se agregan los cuatro `*Score` filtrados por `group`.
+
+### Copa del Rey (solo final) y Supercopa de España
+- Ya modeladas (`Match.competition`/`isKnockout`, `QualifierPrediction`/`QualifierPredictionScore`,
+  `Rule` con `key: 'knockout_qualifier'`, `GroupRuleSettings.enabledCompetitions`) — ver arriba.
+- Solo se cuenta el resultado a los 90' (sin prórroga ni penaltis) para el resultado normal;
+  si acaba en empate, se puntúa aparte quién se clasifica (`QualifierPredictionScore`).
+- Opt-in por peña: si el admin no activa `copa_del_rey`/`supercopa` en `enabledCompetitions`,
+  esos partidos no generan puntuación para su grupo.
+- Pendiente de detallar: de dónde salen estos partidos (no vienen del cron de football-data.org
+  de La Liga) — probablemente alta manual por el admin cuando se implemente esta parte.
 
 ## Estado actual del proyecto
 - [x] Cluster de MongoDB Atlas creado y activo (plan free M0, región Paris)
@@ -139,11 +152,20 @@ function calculateStandingsPoints(predictedTable, realTable) {
 - [x] `npm init` + instalación de dependencias (express, mongoose, dotenv, cors, bcryptjs, jsonwebtoken + typescript, tsx, @types/*)
 - [x] `.env` con MONGODB_URI, JWT_SECRET, JWT_REFRESH_SECRET, FOOTBALL_API_KEY (placeholders — falta URI real de Atlas)
 - [x] `server.ts` con conexión a Mongo + endpoint `/health`
-- [ ] Modelos Mongoose (User, Match, Prediction, Group, StandingsPrediction)
+- [x] Modelos Mongoose (User, Group, Match, Rule, GroupRuleSettings, Prediction, PredictionScore,
+      StandingsPrediction, StandingsPredictionScore, AwardPrediction, AwardPredictionScore,
+      ScoreMultiplier, QualifierPrediction, QualifierPredictionScore)
+- [ ] Motor de reglas (evaluadores por `key` en `src/services/rules/`)
 - [ ] Auth (registro/login JWT con refresh tokens)
+- [ ] Grupos: crear, unirse por inviteCode, generar GroupRuleSettings inicial
 - [ ] Sincronización de partidos desde football-data.org (cron)
-- [ ] Endpoints de predicciones (crear, listar, bloqueo por fecha)
-- [ ] Job de cálculo de puntos
+- [ ] Endpoints de predicciones de partido (crear, listar, bloqueo por fecha)
+- [ ] Endpoints de predicción de clasificación y Pichichi/Zamora
+- [ ] Endpoints de predicción de "quién se clasifica" en partidos `isKnockout` (Copa del Rey/Supercopa)
+- [ ] Endpoints admin (GroupRuleSettings, ScoreMultiplier, enabledCompetitions, resultado real de Pichichi/Zamora)
+- [ ] Alta manual de partidos de Copa del Rey (final) y Supercopa de España (no vienen del cron)
+- [ ] Jobs de cálculo de puntos (partidos, clasificación, premios, clasificados en empates)
+- [ ] Endpoint de ranking por peña
 - [ ] Proyecto Expo (frontend) — pendiente de crear en `/app`
 
 ## Preferencias del usuario
