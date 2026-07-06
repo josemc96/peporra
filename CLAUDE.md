@@ -19,8 +19,8 @@ peporra/
     /src
       /config         ← env.ts, db.ts
       /models
-      /controllers    ← auth.controller.ts
-      /routes         ← auth.routes.ts
+      /controllers    ← auth.controller.ts, group.controller.ts
+      /routes         ← auth.routes.ts, group.routes.ts
       /middleware     ← auth.middleware.ts (requireAuth/requireAdmin), errorHandler.ts
       /services
         /auth         ← password.service.ts (bcrypt), token.service.ts (JWT), types.ts
@@ -61,6 +61,14 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
   { id, role }` (tipo aumentado en `types/express.d.ts`). `requireAdmin`: exige `role === 'admin'`.
 - Errores de negocio se lanzan como `AppError(message, statusCode)` y los captura
   `middleware/errorHandler.ts` (Express 5 reenvía rechazos de async handlers automáticamente).
+
+## Grupos (peñas)
+- `POST /api/groups` (crear), `POST /api/groups/join` (unirse por inviteCode), `GET /api/groups`
+  (mis peñas), `GET /api/groups/:id` (detalle, solo si eres miembro) — todas requieren `requireAuth`
+- `inviteCode` generado con `nanoid(8)`, reintenta hasta 5 veces si hay colisión (prácticamente nunca)
+- Al crear un grupo se genera automáticamente su `GroupRuleSettings` con las 6 reglas del catálogo
+  (`points = defaultPoints`, todas `active: false`) — el admin las activa/ajusta después desde su panel
+- Unirse dos veces al mismo grupo devuelve 409; ver un grupo sin ser miembro devuelve 403
 
 ## Modelos de datos (MongoDB / Mongoose, TypeScript)
 
@@ -181,7 +189,8 @@ peña puede querer puntuaciones distintas.
 - [x] Auth (registro/login JWT con refresh tokens): `/api/auth/register|login|refresh|logout|me`,
       `requireAuth`/`requireAdmin`, `User.tokenVersion` para invalidar refresh tokens en logout,
       `AppError` + `errorHandler` centralizado. Probado end-to-end contra el servidor real.
-- [ ] Grupos: crear, unirse por inviteCode, generar GroupRuleSettings inicial
+- [x] Grupos: crear (con inviteCode nanoid + GroupRuleSettings inicial autogenerado), unirse por
+      inviteCode, listar mis peñas, detalle de peña (solo miembros). Probado end-to-end.
 - [ ] Sincronización de partidos desde football-data.org (cron)
 - [ ] Endpoints de predicciones de partido (crear, listar, bloqueo por fecha)
 - [ ] Endpoints de predicción de clasificación y Pichichi/Zamora

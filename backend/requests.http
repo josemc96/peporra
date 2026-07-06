@@ -41,3 +41,31 @@ Content-Type: application/json
 ### Logout (invalida los refresh tokens emitidos)
 POST {{baseUrl}}/api/auth/logout
 Authorization: Bearer {{login.response.body.accessToken}}
+
+### Crear peña (usa el accessToken del login de arriba)
+# @name createGroup
+POST {{baseUrl}}/api/groups
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "name": "Peña de prueba",
+  "season": "2026-2027"
+}
+
+### Unirse a una peña por inviteCode
+POST {{baseUrl}}/api/groups/join
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "inviteCode": "{{createGroup.response.body.group.inviteCode}}"
+}
+
+### Mis peñas
+GET {{baseUrl}}/api/groups
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Detalle de una peña
+GET {{baseUrl}}/api/groups/{{createGroup.response.body.group._id}}
+Authorization: Bearer {{login.response.body.accessToken}}
