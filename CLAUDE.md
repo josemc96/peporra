@@ -19,8 +19,8 @@ peporra/
     /src
       /config         ← env.ts, db.ts
       /models
-      /controllers    ← auth.controller.ts, group.controller.ts, admin.controller.ts, match.controller.ts
-      /routes         ← auth.routes.ts, group.routes.ts, admin.routes.ts, match.routes.ts
+      /controllers    ← auth.controller.ts, group.controller.ts, admin.controller.ts, match.controller.ts, prediction.controller.ts
+      /routes         ← auth.routes.ts, group.routes.ts, admin.routes.ts, match.routes.ts, prediction.routes.ts
       /middleware     ← auth.middleware.ts (requireAuth/requireAdmin), errorHandler.ts
       /services
         /auth         ← password.service.ts (bcrypt), token.service.ts (JWT), types.ts
@@ -81,6 +81,17 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
 - Al crear un grupo se genera automáticamente su `GroupRuleSettings` con las 6 reglas del catálogo
   (`points = defaultPoints`, todas `active: false`) — el admin las activa/ajusta después desde su panel
 - Unirse dos veces al mismo grupo devuelve 409; ver un grupo sin ser miembro devuelve 403
+
+## Predicciones de partido
+- `PUT /api/predictions` (crear o actualizar mi predicción — upsert por `user`+`match`),
+  `GET /api/predictions` (las mías, filtros opcionales `matchday`/`season`),
+  `GET /api/predictions/:matchId` (mi predicción para ese partido, o `null`) — todas `requireAuth`
+- Bloqueo: si `now >= match.startTime` el `PUT` devuelve 409 — no se puede predecir ni editar
+  un partido que ya ha empezado
+- Como los partidos de toda la temporada se sincronizan de una vez (`Match.startTime` ya
+  guardado), un usuario puede predecir cualquier jornada futura desde ya, sin esperar a que
+  se jueguen las anteriores — el bloqueo es por partido, no por orden de jornada
+- Validación: `predictedHome`/`predictedAway` deben ser enteros no negativos (400 si no)
 
 ## Modelos de datos (MongoDB / Mongoose, TypeScript)
 
@@ -226,7 +237,8 @@ peña puede querer puntuaciones distintas.
       con `node-cron`) + `POST /api/admin/sync-matches` para forzarla manualmente. Probado
       contra la API real: 380 partidos de La Liga 2026-2027 sincronizados e idempotente.
 - [x] `GET /api/matches`: lista partidos guardados (filtros season/matchday/competition). Probado.
-- [ ] Endpoints de predicciones de partido (crear, listar, bloqueo por fecha)
+- [x] Endpoints de predicciones de partido: `PUT/GET /api/predictions`, `GET /api/predictions/:matchId`,
+      upsert por `(user, match)`, bloqueo por `match.startTime` (409), validación de inputs. Probado end-to-end.
 - [ ] Endpoints de predicción de clasificación y Pichichi/Zamora
 - [ ] Endpoints de predicción de "quién se clasifica" en partidos `isKnockout` (Copa del Rey/Supercopa)
 - [ ] Endpoints admin (GroupRuleSettings, ScoreMultiplier, enabledCompetitions, resultado real de Pichichi/Zamora)
