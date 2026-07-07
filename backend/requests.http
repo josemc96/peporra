@@ -86,3 +86,22 @@ Authorization: Bearer {{login.response.body.accessToken}}
 ### Ver los partidos de una jornada concreta
 GET {{baseUrl}}/api/matches?matchday=1
 Authorization: Bearer {{login.response.body.accessToken}}
+
+### Crear/actualizar mi predicción de un partido (sustituye matchId por un _id real de /api/matches)
+PUT {{baseUrl}}/api/predictions
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "matchId": "PON_AQUI_UN_MATCH_ID",
+  "predictedHome": 2,
+  "predictedAway": 1
+}
+
+### Mis predicciones (filtro opcional por jornada/temporada)
+GET {{baseUrl}}/api/predictions?matchday=1&season=2026-2027
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Mi predicción para un partido concreto
+GET {{baseUrl}}/api/predictions/PON_AQUI_UN_MATCH_ID
+Authorization: Bearer {{login.response.body.accessToken}}
