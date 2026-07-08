@@ -136,9 +136,21 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
   si no, el `PUT` devuelve 400. Mismo bloqueo que `/api/predictions`: 409 si `now >= match.startTime`
 - `predictedQualifier` es `'home'` o `'away'` (no hay modelo de equipos aparte, se referencia
   el lado del partido)
-- **Pendiente relacionado**: todavía no hay endpoint para que el admin dé de alta partidos de
-  Copa del Rey/Supercopa (`isKnockout: true`) — sin eso, no hay ningún `matchId` real con el
-  que probar este endpoint desde `requests.http` más allá de los tests automáticos
+- **Resuelto**: ver "Alta manual de partidos de Copa del Rey/Supercopa" más abajo — ya se puede
+  probar con un `matchId` real de principio a fin.
+
+## Alta manual de partidos de Copa del Rey / Supercopa (admin)
+- `POST /api/matches` (`competition` debe ser `copa_del_rey` o `supercopa` — `la_liga` solo viene
+  del cron, rechazado con 400 aquí). `isKnockout` se fuerza a `true` automáticamente, no es
+  configurable en el body.
+- `PUT /api/matches/:id/result`: introduce el resultado final a los 90' (`homeScore`/`awayScore`),
+  pone `status: 'finished'`. Funciona sobre cualquier partido (también sirve para corregir un
+  partido de La Liga si hiciera falta).
+- `PUT /api/matches/:id/qualifier`: introduce quién se clasificó de verdad (`home`/`away`),
+  guardado en el nuevo campo `Match.realQualifier`. Solo se acepta si `match.isKnockout`, el
+  partido ya tiene resultado (`status: 'finished'`) y ese resultado fue empate (`homeScore ===
+  awayScore`) — si no hubo empate, esta predicción no tenía sentido y se rechaza con 400.
+- Las tres rutas requieren `requireAuth` + `requireAdmin`.
 
 ## Modelos de datos (MongoDB / Mongoose, TypeScript)
 
@@ -155,11 +167,12 @@ Enums compartidos en `backend/src/types/enums.ts`.
 ### Match
 - season, competition (`la_liga`/`copa_del_rey`/`supercopa`, default `la_liga`), matchday
   (opcional, solo aplica a `la_liga`), isKnockout (Boolean), homeTeam, awayTeam, startTime,
-  homeScore/awayScore opcionales, status (`pending`/`finished`)
-- Se sincroniza vía cron desde football-data.org (solo La Liga; Copa del Rey/Supercopa se
-  crean/gestionan aparte, sin API — pendiente de detallar cuando se implementen)
-- `isKnockout = true` en la final de Copa del Rey y en los partidos de Supercopa: si acaban
-  empatados a los 90' (sin prórroga/penaltis), hay una predicción adicional de quién se clasifica
+  homeScore/awayScore opcionales, status (`pending`/`finished`), realQualifier opcional (`home`/`away`)
+- La Liga se sincroniza vía cron desde football-data.org; Copa del Rey/Supercopa se dan de alta
+  a mano por el admin (`POST /api/matches` + `PUT /:id/result` + `PUT /:id/qualifier`)
+- `isKnockout = true` en la final de Copa del Rey y en los partidos de Supercopa (se fuerza
+  automáticamente al crearlos a mano): si acaban empatados a los 90' (sin prórroga/penaltis),
+  hay una predicción adicional de quién se clasifica, y `realQualifier` guarda el resultado real
 
 ### Scorer (clasificación de goleadores, apoyo a la predicción de Pichichi)
 - season, externalPlayerId (id de football-data.org), playerName, team, goals, assists/penalties/
@@ -301,9 +314,10 @@ peña puede querer puntuaciones distintas.
       /api/qualifier-predictions` (+ `/:matchId`), valida `match.isKnockout`, mismo bloqueo por
       `startTime`. Probado end-to-end (con partidos de prueba, ya que aún no hay alta manual real).
 - [ ] Endpoints admin (GroupRuleSettings, ScoreMultiplier, enabledCompetitions, resultado real de Pichichi/Zamora)
-- [ ] Alta manual de partidos de Copa del Rey (final) y Supercopa de España — confirmado que no
-      vienen del cron (football-data.org free no las cubre): admin elige equipos, introduce
-      resultado final y, si hubo empate a 90', quién se clasifica
+- [x] Alta manual de partidos de Copa del Rey (final) y Supercopa de España: `POST /api/matches`
+      (elige equipos, fuerza `isKnockout: true`), `PUT /:id/result` (resultado final), `PUT
+      /:id/qualifier` (solo si empate real a 90'). Probado end-to-end, incluida la integración
+      real con `qualifier-predictions` (la limitación de la rama anterior queda resuelta).
 - [ ] Jobs de cálculo de puntos (partidos, clasificación, premios, clasificados en empates)
 - [ ] Endpoint de ranking por peña
 - [ ] Proyecto Expo (frontend) — pendiente de crear en `/app`
