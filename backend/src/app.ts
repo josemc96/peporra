@@ -9,6 +9,9 @@ import standingsPredictionRoutes from './routes/standingsPrediction.routes';
 import awardPredictionRoutes from './routes/awardPrediction.routes';
 import scorerRoutes from './routes/scorer.routes';
 import qualifierPredictionRoutes from './routes/qualifierPrediction.routes';
+import groupRuleSettingsRoutes from './routes/groupRuleSettings.routes';
+import multiplierRoutes from './routes/multiplier.routes';
+import awardResultRoutes from './routes/awardResult.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app: Application = express();
@@ -29,6 +32,9 @@ app.use('/api/standings-predictions', standingsPredictionRoutes);
 app.use('/api/award-predictions', awardPredictionRoutes);
 app.use('/api/scorers', scorerRoutes);
 app.use('/api/qualifier-predictions', qualifierPredictionRoutes);
+app.use('/api/groups/:groupId/rule-settings', groupRuleSettingsRoutes);
+app.use('/api/groups/:groupId/multipliers', multiplierRoutes);
+app.use('/api/award-results', awardResultRoutes);
 
 app.use(errorHandler);
 

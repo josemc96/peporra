@@ -210,3 +210,57 @@ Authorization: Bearer {{login.response.body.accessToken}}
 ### Mi predicción de "quién se clasifica" para un partido concreto
 GET {{baseUrl}}/api/qualifier-predictions/{{createCupMatch.response.body.match._id}}
 Authorization: Bearer {{login.response.body.accessToken}}
+
+### Ver la configuración de reglas de mi peña (cualquier miembro; usa el _id de createGroup)
+GET {{baseUrl}}/api/groups/{{createGroup.response.body.group._id}}/rule-settings?season=2026-2027
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Activar una regla y ajustar sus puntos, + activar Copa del Rey (solo el admin de la peña)
+PUT {{baseUrl}}/api/groups/{{createGroup.response.body.group._id}}/rule-settings
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "season": "2026-2027",
+  "rules": [
+    { "key": "exact_score", "points": 3, "active": true },
+    { "key": "correct_sign", "points": 1, "active": true }
+  ],
+  "enabledCompetitions": ["copa_del_rey"]
+}
+
+### Crear un multiplicador x2 para toda la jornada 1 de mi peña (solo el admin de la peña)
+# @name createMultiplier
+POST {{baseUrl}}/api/groups/{{createGroup.response.body.group._id}}/multipliers
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "season": "2026-2027",
+  "scope": "matchday",
+  "matchday": 1,
+  "multiplier": 2
+}
+
+### Ver los multiplicadores de mi peña
+GET {{baseUrl}}/api/groups/{{createGroup.response.body.group._id}}/multipliers?season=2026-2027
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Borrar un multiplicador (solo el admin de la peña)
+DELETE {{baseUrl}}/api/groups/{{createGroup.response.body.group._id}}/multipliers/{{createMultiplier.response.body.multiplier._id}}
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Introducir el resultado real de Pichichi/Zamora (requiere role admin GLOBAL, no el de la peña)
+PUT {{baseUrl}}/api/admin/award-results
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "season": "2026-2027",
+  "award": "pichichi",
+  "realPlayer": "Kylian Mbappé"
+}
+
+### Ver los resultados reales de premios ya introducidos
+GET {{baseUrl}}/api/award-results?season=2026-2027
+Authorization: Bearer {{login.response.body.accessToken}}
