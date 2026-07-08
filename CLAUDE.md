@@ -21,16 +21,19 @@ peporra/
       /models
       /controllers    ← auth.controller.ts, group.controller.ts, admin.controller.ts, match.controller.ts
         prediction.controller.ts, standingsPrediction.controller.ts, awardPrediction.controller.ts
-        scorer.controller.ts, qualifierPrediction.controller.ts
+        scorer.controller.ts, qualifierPrediction.controller.ts, groupRuleSettings.controller.ts
+        multiplier.controller.ts, awardResult.controller.ts
       /routes         ← auth.routes.ts, group.routes.ts, admin.routes.ts, match.routes.ts
         prediction.routes.ts, standingsPrediction.routes.ts, awardPrediction.routes.ts
-        scorer.routes.ts, qualifierPrediction.routes.ts
+        scorer.routes.ts, qualifierPrediction.routes.ts, groupRuleSettings.routes.ts
+        multiplier.routes.ts, awardResult.routes.ts
       /middleware     ← auth.middleware.ts (requireAuth/requireAdmin), errorHandler.ts
       /services
         /auth         ← password.service.ts (bcrypt), token.service.ts (JWT), types.ts
         /rules        ← motor de reglas: evaluadores, registro, resolveActiveRules, resolveMultiplier
         footballApi.service.ts (llamadas a football-data.org: partidos y goleadores)
         season.service.ts (getSeasonKickoff/isSeasonLocked — bloqueo compartido standings/awards)
+        groupAuth.service.ts (requireGroupMember/requireGroupAdmin — admin POR PEÑA, distinto de requireAdmin)
       /jobs           ← syncMatches.job.ts, syncScorers.job.ts, scheduler.ts (cron cada 10 minutos);
         cálculo de puntos pendiente
       /scripts        ← seedRules.ts (siembra el catálogo Rule en Mongo)
@@ -152,6 +155,32 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
   awayScore`) — si no hubo empate, esta predicción no tenía sentido y se rechaza con 400.
 - Las tres rutas requieren `requireAuth` + `requireAdmin`.
 
+## Configuración por peña y resultados reales de premios (admin)
+**Importante — dos roles de "admin" distintos, no confundir:**
+- **Admin de la peña** (`Group.admin`, campo por documento): decide `GroupRuleSettings` y
+  `ScoreMultiplier` de SU peña. Se comprueba con un helper propio (`groupAuth.service.ts`,
+  `requireGroupAdmin`/`requireGroupMember`), NO con `req.user.role`.
+- **Admin global del sitio** (`User.role === 'admin'`, `requireAdmin` de siempre): el mismo que
+  ya usábamos para sincronizar partidos/goleadores. Gestiona el resultado real de Pichichi/Zamora,
+  que es un hecho objetivo de la temporada, no algo que decida cada peña por separado.
+
+### GroupRuleSettings (admin de la peña)
+- `GET /api/groups/:groupId/rule-settings?season=X` — cualquier miembro puede ver la configuración
+- `PUT /api/groups/:groupId/rule-settings` — solo el admin de esa peña. Body:
+  `{ season, rules?: [{ key, points?, active? }], enabledCompetitions?: [...] }`. Actualiza solo
+  las reglas incluidas (parcial, no hace falta mandar las 6); `key` desconocida → 400.
+
+### ScoreMultiplier (admin de la peña)
+- `POST/GET /api/groups/:groupId/multipliers` (+ `DELETE /:id`) — crear/listar/borrar. Crear y
+  borrar exigen ser el admin de la peña; listar solo exige ser miembro. Validación de
+  `scope`/`match`/`matchday`/`multiplier` (≥1) en el controller, además del schema.
+
+### AwardResult (admin global — resultado real de Pichichi/Zamora)
+- Nuevo modelo `AwardResult { season, award, realPlayer }`, único por `(season, award)`
+- `PUT /api/admin/award-results` (admin global): introduce/actualiza el resultado real
+- `GET /api/award-results` (cualquier usuario autenticado): consulta pública de resultados ya
+  confirmados — útil para que la app muestre "el Pichichi real fue X" cuando se sepa
+
 ## Modelos de datos (MongoDB / Mongoose, TypeScript)
 
 Implementados en `backend/src/models/` (interfaz `IX` + `Schema<IX>` + `model<IX>`).
@@ -220,6 +249,11 @@ Enums compartidos en `backend/src/types/enums.ts`.
 ### AwardPredictionScore (puntos de Pichichi/Zamora, por peña)
 - awardPrediction, group, points. Único por `(awardPrediction, group)`
 - Pichichi y Zamora tienen puntuaciones **independientes** configurables por el admin
+
+### AwardResult (resultado real de Pichichi/Zamora, global — no por peña)
+- season, award (`pichichi`/`zamora`), realPlayer. Único por `(season, award)`
+- Introducido por el admin GLOBAL del sitio (`PUT /api/admin/award-results`), no por cada peña
+  por separado — es un hecho objetivo de la temporada real, no una decisión de la peña
 
 ### ScoreMultiplier (multiplicador manual x2/x3/xN)
 - group, season, scope (`match` \| `matchday`), match u opcional matchday, multiplier (≥1)
@@ -313,7 +347,10 @@ peña puede querer puntuaciones distintas.
 - [x] Endpoints de predicción de "quién se clasifica" en partidos `isKnockout`: `PUT/GET
       /api/qualifier-predictions` (+ `/:matchId`), valida `match.isKnockout`, mismo bloqueo por
       `startTime`. Probado end-to-end (con partidos de prueba, ya que aún no hay alta manual real).
-- [ ] Endpoints admin (GroupRuleSettings, ScoreMultiplier, enabledCompetitions, resultado real de Pichichi/Zamora)
+- [x] Endpoints admin: `GET/PUT /api/groups/:groupId/rule-settings` y `POST/GET/DELETE
+      /api/groups/:groupId/multipliers` (admin de la peña, vía `groupAuth.service.ts` — distinto
+      de `requireAdmin` global), `PUT /api/admin/award-results` + `GET /api/award-results`
+      (admin global, nuevo modelo `AwardResult`). Probado end-to-end (22 casos).
 - [x] Alta manual de partidos de Copa del Rey (final) y Supercopa de España: `POST /api/matches`
       (elige equipos, fuerza `isKnockout: true`), `PUT /:id/result` (resultado final), `PUT
       /:id/qualifier` (solo si empate real a 90'). Probado end-to-end, incluida la integración
