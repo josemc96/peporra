@@ -7,5 +7,6 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 
 router.post('/sync-matches', adminController.triggerMatchSync);
+router.post('/sync-scorers', adminController.triggerScorersSync);
 
 export default router;
