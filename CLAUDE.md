@@ -19,14 +19,18 @@ peporra/
     /src
       /config         ← env.ts, db.ts
       /models
-      /controllers    ← auth.controller.ts, group.controller.ts, admin.controller.ts, match.controller.ts, prediction.controller.ts
-      /routes         ← auth.routes.ts, group.routes.ts, admin.routes.ts, match.routes.ts, prediction.routes.ts
+      /controllers    ← auth.controller.ts, group.controller.ts, admin.controller.ts, match.controller.ts
+        prediction.controller.ts, standingsPrediction.controller.ts, awardPrediction.controller.ts, scorer.controller.ts
+      /routes         ← auth.routes.ts, group.routes.ts, admin.routes.ts, match.routes.ts
+        prediction.routes.ts, standingsPrediction.routes.ts, awardPrediction.routes.ts, scorer.routes.ts
       /middleware     ← auth.middleware.ts (requireAuth/requireAdmin), errorHandler.ts
       /services
         /auth         ← password.service.ts (bcrypt), token.service.ts (JWT), types.ts
         /rules        ← motor de reglas: evaluadores, registro, resolveActiveRules, resolveMultiplier
-        footballApi.service.ts (llamadas a football-data.org)
-      /jobs           ← syncMatches.job.ts, scheduler.ts (cron cada 10 minutos); cálculo de puntos pendiente
+        footballApi.service.ts (llamadas a football-data.org: partidos y goleadores)
+        season.service.ts (getSeasonKickoff/isSeasonLocked — bloqueo compartido standings/awards)
+      /jobs           ← syncMatches.job.ts, syncScorers.job.ts, scheduler.ts (cron cada 10 minutos);
+        cálculo de puntos pendiente
       /scripts        ← seedRules.ts (siembra el catálogo Rule en Mongo)
       /utils          ← AppError.ts
       /types          ← enums.ts, express.d.ts (augmenta Request.user)
@@ -93,6 +97,36 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
   se jueguen las anteriores — el bloqueo es por partido, no por orden de jornada
 - Validación: `predictedHome`/`predictedAway` deben ser enteros no negativos (400 si no)
 
+## Predicciones de clasificación y premios (Pichichi/Zamora)
+- `PUT/GET /api/standings-predictions` (+ `GET /:season/:phase`) y
+  `PUT/GET /api/award-predictions` (+ `GET /:season/:award`) — mismo patrón de upsert que
+  `/api/predictions`, todas `requireAuth`
+- Bloqueo compartido (`src/services/season.service.ts`): se calcula el kickoff de la temporada
+  (el `startTime` más temprano entre los partidos de La Liga de esa `season`) y se bloquea el
+  `PUT` con 409 si `now >= kickoff` — **fijo, no configurable por el admin**, tal como estaba
+  definido. Si aún no hay partidos sincronizados para esa temporada, no se bloquea.
+- Validación de `predictedTable`: array no vacío de `{ position, team }`, posiciones enteras
+  positivas sin duplicar, equipos sin duplicar (no se valida contra los 20 equipos reales de
+  La Liga, solo consistencia estructural)
+- `predictedPlayer` en premios es texto libre (no hay catálogo de jugadores) — el resultado real
+  lo introduce el admin manualmente al terminar la temporada (endpoint aún pendiente)
+
+### Goleadores (apoyo a la predicción de Pichichi — confirmado con la API real)
+- `GET /competitions/PD/scorers` de football-data.org **sí existe y funciona en el plan gratuito**:
+  da la clasificación de máximos goleadores de la temporada completa (jugador, equipo, goles,
+  asistencias, penaltis). Se sincroniza igual que los partidos: `syncScorers.job.ts` +
+  `Scorer` (upsert por `season`+`externalPlayerId`) + mismo cron de 10 min (`scheduler.ts`) +
+  `POST /api/admin/sync-scorers` manual + `GET /api/scorers` (público, `requireAuth`, filtro
+  `season`, cachea en Mongo, no llama a la API en cada request de usuario).
+- **Confirmado que NO existe** el desglose de goles por partido (`GET /matches/:id` no incluye
+  eventos de gol) ni ningún dato de portero/goles encajados individual — ambos están bloqueados
+  en el plan de pago. Por eso:
+  - **Pichichi**: se apoya en datos reales (`/api/scorers`) mientras el usuario decide su
+    predicción, pero el resultado final para puntuar sigue siendo introducido a mano por el
+    admin (la API no confirma oficialmente "quién ganó el Pichichi", solo da el conteo de goles)
+  - **Zamora**: sigue siendo 100% manual, sin ningún apoyo de datos — no hay forma de derivar
+    goles encajados por portero individual con el plan gratuito
+
 ## Modelos de datos (MongoDB / Mongoose, TypeScript)
 
 Implementados en `backend/src/models/` (interfaz `IX` + `Schema<IX>` + `model<IX>`).
@@ -113,6 +147,11 @@ Enums compartidos en `backend/src/types/enums.ts`.
   crean/gestionan aparte, sin API — pendiente de detallar cuando se implementen)
 - `isKnockout = true` en la final de Copa del Rey y en los partidos de Supercopa: si acaban
   empatados a los 90' (sin prórroga/penaltis), hay una predicción adicional de quién se clasifica
+
+### Scorer (clasificación de goleadores, apoyo a la predicción de Pichichi)
+- season, externalPlayerId (id de football-data.org), playerName, team, goals, assists/penalties/
+  playedMatches opcionales
+- Único por `(season, externalPlayerId)`. Se sincroniza igual que `Match` (cron + endpoint admin)
 
 ### Rule (catálogo global de tipos de regla)
 - key (único), scope (`match` \| `standings` \| `award` \| `knockout`), name, description, defaultPoints
@@ -239,7 +278,12 @@ peña puede querer puntuaciones distintas.
 - [x] `GET /api/matches`: lista partidos guardados (filtros season/matchday/competition). Probado.
 - [x] Endpoints de predicciones de partido: `PUT/GET /api/predictions`, `GET /api/predictions/:matchId`,
       upsert por `(user, match)`, bloqueo por `match.startTime` (409), validación de inputs. Probado end-to-end.
-- [ ] Endpoints de predicción de clasificación y Pichichi/Zamora
+- [x] Endpoints de predicción de clasificación y Pichichi/Zamora: `PUT/GET /api/standings-predictions`,
+      `PUT/GET /api/award-predictions` (+ variantes `/:season/:phase|award`), bloqueo compartido por
+      kickoff de temporada (`season.service.ts`), validación de tabla/jugador. Probado end-to-end.
+- [x] Sincronización de goleadores (apoyo a Pichichi): `syncScorers.job.ts` + `Scorer` +
+      `POST /api/admin/sync-scorers` + `GET /api/scorers`. Confirmado con la API real que no hay
+      desglose de goles por partido ni datos de portero — Zamora sigue siendo 100% manual.
 - [ ] Endpoints de predicción de "quién se clasifica" en partidos `isKnockout` (Copa del Rey/Supercopa)
 - [ ] Endpoints admin (GroupRuleSettings, ScoreMultiplier, enabledCompetitions, resultado real de Pichichi/Zamora)
 - [ ] Alta manual de partidos de Copa del Rey (final) y Supercopa de España — confirmado que no

@@ -5,6 +5,9 @@ import groupRoutes from './routes/group.routes';
 import adminRoutes from './routes/admin.routes';
 import matchRoutes from './routes/match.routes';
 import predictionRoutes from './routes/prediction.routes';
+import standingsPredictionRoutes from './routes/standingsPrediction.routes';
+import awardPredictionRoutes from './routes/awardPrediction.routes';
+import scorerRoutes from './routes/scorer.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app: Application = express();
@@ -21,6 +24,9 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/predictions', predictionRoutes);
+app.use('/api/standings-predictions', standingsPredictionRoutes);
+app.use('/api/award-predictions', awardPredictionRoutes);
+app.use('/api/scorers', scorerRoutes);
 
 app.use(errorHandler);
 

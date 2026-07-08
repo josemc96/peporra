@@ -14,20 +14,32 @@ export interface FootballDataMatch {
   score: { fullTime: { home: number | null; away: number | null } };
 }
 
+export interface FootballDataScorer {
+  player: { id: number; name: string };
+  team: { name: string };
+  goals: number;
+  assists: number | null;
+  penalties: number | null;
+  playedMatches: number | null;
+}
+
 interface FootballDataMatchesResponse {
   matches: FootballDataMatch[];
 }
 
+interface FootballDataScorersResponse {
+  scorers: FootballDataScorer[];
+}
+
 // El plan gratuito de football-data.org limita a 10 peticiones/minuto. Como este
-// servicio se llama desde un cron (no desde requests de usuario), una llamada por
-// ejecución es más que suficiente y no hace falta throttling adicional.
-export async function fetchLaLigaMatches(seasonStartYear: string): Promise<FootballDataMatch[]> {
+// servicio se llama desde un cron (no desde requests de usuario), unas pocas llamadas
+// por ejecución son más que suficientes y no hace falta throttling adicional.
+async function getFromFootballData<T>(path: string): Promise<T> {
   if (!env.footballApiKey) {
     throw new AppError('FOOTBALL_API_KEY no está configurada', 500);
   }
 
-  const url = `${BASE_URL}/competitions/${LA_LIGA_CODE}/matches?season=${seasonStartYear}`;
-  const response = await fetch(url, {
+  const response = await fetch(`${BASE_URL}${path}`, {
     headers: { 'X-Auth-Token': env.footballApiKey },
   });
 
@@ -35,6 +47,19 @@ export async function fetchLaLigaMatches(seasonStartYear: string): Promise<Footb
     throw new AppError(`football-data.org devolvió ${response.status}: ${await response.text()}`, 502);
   }
 
-  const data = (await response.json()) as FootballDataMatchesResponse;
+  return response.json() as Promise<T>;
+}
+
+export async function fetchLaLigaMatches(seasonStartYear: string): Promise<FootballDataMatch[]> {
+  const data = await getFromFootballData<FootballDataMatchesResponse>(
+    `/competitions/${LA_LIGA_CODE}/matches?season=${seasonStartYear}`
+  );
   return data.matches;
+}
+
+export async function fetchTopScorers(seasonStartYear: string, limit = 20): Promise<FootballDataScorer[]> {
+  const data = await getFromFootballData<FootballDataScorersResponse>(
+    `/competitions/${LA_LIGA_CODE}/scorers?season=${seasonStartYear}&limit=${limit}`
+  );
+  return data.scorers;
 }

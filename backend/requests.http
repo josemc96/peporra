@@ -93,7 +93,7 @@ Content-Type: application/json
 Authorization: Bearer {{login.response.body.accessToken}}
 
 {
-  "matchId": "PON_AQUI_UN_MATCH_ID",
+  "matchId": "6a4ba5563bf5892d31bcb735",
   "predictedHome": 2,
   "predictedAway": 1
 }
@@ -103,5 +103,59 @@ GET {{baseUrl}}/api/predictions?matchday=1&season=2026-2027
 Authorization: Bearer {{login.response.body.accessToken}}
 
 ### Mi predicción para un partido concreto
-GET {{baseUrl}}/api/predictions/PON_AQUI_UN_MATCH_ID
+GET {{baseUrl}}/api/predictions/6a4ba5563bf5892d31bcb735
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Crear/actualizar mi predicción de clasificación (fase 'ida' o 'vuelta')
+PUT {{baseUrl}}/api/standings-predictions
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "season": "2026-2027",
+  "phase": "ida",
+  "predictedTable": [
+    { "position": 1, "team": "Real Madrid CF" },
+    { "position": 2, "team": "FC Barcelona" }
+  ]
+}
+
+### Mis predicciones de clasificación
+GET {{baseUrl}}/api/standings-predictions?season=2026-2027
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Mi predicción de clasificación de una fase concreta
+GET {{baseUrl}}/api/standings-predictions/2026-2027/ida
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Crear/actualizar mi predicción de Pichichi o Zamora
+PUT {{baseUrl}}/api/award-predictions
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "season": "2026-2027",
+  "award": "pichichi",
+  "predictedPlayer": "Kylian Mbappé"
+}
+
+### Mis predicciones de premios
+GET {{baseUrl}}/api/award-predictions?season=2026-2027
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Mi predicción de un premio concreto
+GET {{baseUrl}}/api/award-predictions/2026-2027/pichichi
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Forzar sincronización de goleadores (requiere role admin)
+POST {{baseUrl}}/api/admin/sync-scorers
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "season": "2026-2027"
+}
+
+### Ver clasificación de goleadores (útil mientras decides tu predicción de Pichichi)
+GET {{baseUrl}}/api/scorers?season=2026-2027
 Authorization: Bearer {{login.response.body.accessToken}}
