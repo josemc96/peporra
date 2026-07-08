@@ -159,3 +159,23 @@ Authorization: Bearer {{login.response.body.accessToken}}
 ### Ver clasificación de goleadores (útil mientras decides tu predicción de Pichichi)
 GET {{baseUrl}}/api/scorers?season=2026-2027
 Authorization: Bearer {{login.response.body.accessToken}}
+
+### Crear/actualizar mi predicción de "quién se clasifica" (solo partidos isKnockout: true)
+# NOTA: todavía no hay endpoint para crear partidos de Copa del Rey/Supercopa (roadmap pendiente),
+# así que ahora mismo no hay ningún matchId real con isKnockout:true para probar esto de verdad.
+PUT {{baseUrl}}/api/qualifier-predictions
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "matchId": "PON_AQUI_UN_MATCH_ID_ISKNOCKOUT",
+  "predictedQualifier": "home"
+}
+
+### Mis predicciones de "quién se clasifica"
+GET {{baseUrl}}/api/qualifier-predictions
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Mi predicción de "quién se clasifica" para un partido concreto
+GET {{baseUrl}}/api/qualifier-predictions/PON_AQUI_UN_MATCH_ID_ISKNOCKOUT
+Authorization: Bearer {{login.response.body.accessToken}}
