@@ -20,9 +20,11 @@ peporra/
       /config         ← env.ts, db.ts
       /models
       /controllers    ← auth.controller.ts, group.controller.ts, admin.controller.ts, match.controller.ts
-        prediction.controller.ts, standingsPrediction.controller.ts, awardPrediction.controller.ts, scorer.controller.ts
+        prediction.controller.ts, standingsPrediction.controller.ts, awardPrediction.controller.ts
+        scorer.controller.ts, qualifierPrediction.controller.ts
       /routes         ← auth.routes.ts, group.routes.ts, admin.routes.ts, match.routes.ts
-        prediction.routes.ts, standingsPrediction.routes.ts, awardPrediction.routes.ts, scorer.routes.ts
+        prediction.routes.ts, standingsPrediction.routes.ts, awardPrediction.routes.ts
+        scorer.routes.ts, qualifierPrediction.routes.ts
       /middleware     ← auth.middleware.ts (requireAuth/requireAdmin), errorHandler.ts
       /services
         /auth         ← password.service.ts (bcrypt), token.service.ts (JWT), types.ts
@@ -126,6 +128,17 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
     admin (la API no confirma oficialmente "quién ganó el Pichichi", solo da el conteo de goles)
   - **Zamora**: sigue siendo 100% manual, sin ningún apoyo de datos — no hay forma de derivar
     goles encajados por portero individual con el plan gratuito
+
+## Predicción de "quién se clasifica" en partidos de eliminatoria
+- `PUT /api/qualifier-predictions` (upsert por `user`+`match`), `GET /api/qualifier-predictions`
+  (las mías), `GET /api/qualifier-predictions/:matchId` — todas `requireAuth`
+- Solo válido si `match.isKnockout === true` (final de Copa del Rey / partidos de Supercopa);
+  si no, el `PUT` devuelve 400. Mismo bloqueo que `/api/predictions`: 409 si `now >= match.startTime`
+- `predictedQualifier` es `'home'` o `'away'` (no hay modelo de equipos aparte, se referencia
+  el lado del partido)
+- **Pendiente relacionado**: todavía no hay endpoint para que el admin dé de alta partidos de
+  Copa del Rey/Supercopa (`isKnockout: true`) — sin eso, no hay ningún `matchId` real con el
+  que probar este endpoint desde `requests.http` más allá de los tests automáticos
 
 ## Modelos de datos (MongoDB / Mongoose, TypeScript)
 
@@ -284,7 +297,9 @@ peña puede querer puntuaciones distintas.
 - [x] Sincronización de goleadores (apoyo a Pichichi): `syncScorers.job.ts` + `Scorer` +
       `POST /api/admin/sync-scorers` + `GET /api/scorers`. Confirmado con la API real que no hay
       desglose de goles por partido ni datos de portero — Zamora sigue siendo 100% manual.
-- [ ] Endpoints de predicción de "quién se clasifica" en partidos `isKnockout` (Copa del Rey/Supercopa)
+- [x] Endpoints de predicción de "quién se clasifica" en partidos `isKnockout`: `PUT/GET
+      /api/qualifier-predictions` (+ `/:matchId`), valida `match.isKnockout`, mismo bloqueo por
+      `startTime`. Probado end-to-end (con partidos de prueba, ya que aún no hay alta manual real).
 - [ ] Endpoints admin (GroupRuleSettings, ScoreMultiplier, enabledCompetitions, resultado real de Pichichi/Zamora)
 - [ ] Alta manual de partidos de Copa del Rey (final) y Supercopa de España — confirmado que no
       vienen del cron (football-data.org free no las cubre): admin elige equipos, introduce

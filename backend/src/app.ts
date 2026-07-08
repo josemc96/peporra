@@ -8,6 +8,7 @@ import predictionRoutes from './routes/prediction.routes';
 import standingsPredictionRoutes from './routes/standingsPrediction.routes';
 import awardPredictionRoutes from './routes/awardPrediction.routes';
 import scorerRoutes from './routes/scorer.routes';
+import qualifierPredictionRoutes from './routes/qualifierPrediction.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app: Application = express();
@@ -27,6 +28,7 @@ app.use('/api/predictions', predictionRoutes);
 app.use('/api/standings-predictions', standingsPredictionRoutes);
 app.use('/api/award-predictions', awardPredictionRoutes);
 app.use('/api/scorers', scorerRoutes);
+app.use('/api/qualifier-predictions', qualifierPredictionRoutes);
 
 app.use(errorHandler);
 
