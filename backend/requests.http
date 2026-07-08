@@ -160,15 +160,46 @@ Authorization: Bearer {{login.response.body.accessToken}}
 GET {{baseUrl}}/api/scorers?season=2026-2027
 Authorization: Bearer {{login.response.body.accessToken}}
 
-### Crear/actualizar mi predicción de "quién se clasifica" (solo partidos isKnockout: true)
-# NOTA: todavía no hay endpoint para crear partidos de Copa del Rey/Supercopa (roadmap pendiente),
-# así que ahora mismo no hay ningún matchId real con isKnockout:true para probar esto de verdad.
+### Crear partido manual de Copa del Rey/Supercopa (requiere role admin, isKnockout se pone a true solo)
+# @name createCupMatch
+POST {{baseUrl}}/api/matches
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "season": "2026-2027",
+  "competition": "copa_del_rey",
+  "homeTeam": "Real Madrid CF",
+  "awayTeam": "FC Barcelona",
+  "startTime": "2027-04-25T20:00:00.000Z"
+}
+
+### Introducir el resultado final (90') de ese partido (requiere role admin)
+PUT {{baseUrl}}/api/matches/{{createCupMatch.response.body.match._id}}/result
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "homeScore": 1,
+  "awayScore": 1
+}
+
+### Introducir quién se clasifica (solo si acabó empatado a los 90', requiere role admin)
+PUT {{baseUrl}}/api/matches/{{createCupMatch.response.body.match._id}}/qualifier
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "qualifier": "home"
+}
+
+### Crear/actualizar mi predicción de "quién se clasifica" (usa el _id del partido creado arriba)
 PUT {{baseUrl}}/api/qualifier-predictions
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.accessToken}}
 
 {
-  "matchId": "PON_AQUI_UN_MATCH_ID_ISKNOCKOUT",
+  "matchId": "{{createCupMatch.response.body.match._id}}",
   "predictedQualifier": "home"
 }
 
@@ -177,5 +208,5 @@ GET {{baseUrl}}/api/qualifier-predictions
 Authorization: Bearer {{login.response.body.accessToken}}
 
 ### Mi predicción de "quién se clasifica" para un partido concreto
-GET {{baseUrl}}/api/qualifier-predictions/PON_AQUI_UN_MATCH_ID_ISKNOCKOUT
+GET {{baseUrl}}/api/qualifier-predictions/{{createCupMatch.response.body.match._id}}
 Authorization: Bearer {{login.response.body.accessToken}}

@@ -1,5 +1,5 @@
 import { Schema, model, Document } from 'mongoose';
-import { Competition, MatchStatus } from '../types/enums';
+import { Competition, MatchSide, MatchStatus } from '../types/enums';
 
 export interface IMatch extends Document {
   season: string;
@@ -13,6 +13,9 @@ export interface IMatch extends Document {
   awayScore?: number;
   status: MatchStatus;
   externalId?: number;
+  // Quién se clasificó de verdad, solo relevante si isKnockout y acabó empatado a los 90'
+  // (introducido a mano por el admin, la API no lo da). Alimenta la regla knockout_qualifier.
+  realQualifier?: MatchSide;
 }
 
 const matchSchema = new Schema<IMatch>({
@@ -34,6 +37,7 @@ const matchSchema = new Schema<IMatch>({
   // id del partido en football-data.org — permite upsert fiable al sincronizar (los
   // partidos de Copa del Rey/Supercopa, dados de alta a mano, no tienen externalId.
   externalId: { type: Number, unique: true, sparse: true },
+  realQualifier: { type: String, enum: ['home', 'away'] },
 });
 
 matchSchema.index({ season: 1, matchday: 1 });
