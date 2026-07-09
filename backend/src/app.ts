@@ -12,6 +12,7 @@ import qualifierPredictionRoutes from './routes/qualifierPrediction.routes';
 import groupRuleSettingsRoutes from './routes/groupRuleSettings.routes';
 import multiplierRoutes from './routes/multiplier.routes';
 import awardResultRoutes from './routes/awardResult.routes';
+import rankingRoutes from './routes/ranking.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 const app: Application = express();
@@ -35,6 +36,7 @@ app.use('/api/qualifier-predictions', qualifierPredictionRoutes);
 app.use('/api/groups/:groupId/rule-settings', groupRuleSettingsRoutes);
 app.use('/api/groups/:groupId/multipliers', multiplierRoutes);
 app.use('/api/award-results', awardResultRoutes);
+app.use('/api/groups/:groupId/ranking', rankingRoutes);
 
 app.use(errorHandler);
 
