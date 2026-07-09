@@ -264,3 +264,16 @@ Authorization: Bearer {{login.response.body.accessToken}}
 ### Ver los resultados reales de premios ya introducidos
 GET {{baseUrl}}/api/award-results?season=2026-2027
 Authorization: Bearer {{login.response.body.accessToken}}
+
+### Forzar el cálculo de puntos (requiere role admin GLOBAL) — puntúa lo que esté pendiente
+POST {{baseUrl}}/api/admin/calculate-scores
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "season": "2026-2027"
+}
+
+### Ver el ranking de mi peña (cualquier miembro; usa el _id de createGroup)
+GET {{baseUrl}}/api/groups/{{createGroup.response.body.group._id}}/ranking?season=2026-2027
+Authorization: Bearer {{login.response.body.accessToken}}

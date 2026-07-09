@@ -22,11 +22,11 @@ peporra/
       /controllers    ← auth.controller.ts, group.controller.ts, admin.controller.ts, match.controller.ts
         prediction.controller.ts, standingsPrediction.controller.ts, awardPrediction.controller.ts
         scorer.controller.ts, qualifierPrediction.controller.ts, groupRuleSettings.controller.ts
-        multiplier.controller.ts, awardResult.controller.ts
+        multiplier.controller.ts, awardResult.controller.ts, ranking.controller.ts
       /routes         ← auth.routes.ts, group.routes.ts, admin.routes.ts, match.routes.ts
         prediction.routes.ts, standingsPrediction.routes.ts, awardPrediction.routes.ts
         scorer.routes.ts, qualifierPrediction.routes.ts, groupRuleSettings.routes.ts
-        multiplier.routes.ts, awardResult.routes.ts
+        multiplier.routes.ts, awardResult.routes.ts, ranking.routes.ts
       /middleware     ← auth.middleware.ts (requireAuth/requireAdmin), errorHandler.ts
       /services
         /auth         ← password.service.ts (bcrypt), token.service.ts (JWT), types.ts
@@ -34,8 +34,12 @@ peporra/
         footballApi.service.ts (llamadas a football-data.org: partidos y goleadores)
         season.service.ts (getSeasonKickoff/isSeasonLocked — bloqueo compartido standings/awards)
         groupAuth.service.ts (requireGroupMember/requireGroupAdmin — admin POR PEÑA, distinto de requireAdmin)
-      /jobs           ← syncMatches.job.ts, syncScorers.job.ts, scheduler.ts (cron cada 10 minutos);
-        cálculo de puntos pendiente
+        standingsTable.service.ts (calcula la tabla real de La Liga a partir de nuestros Match)
+        competitionEligibility.service.ts (opt-in de Copa del Rey/Supercopa por peña)
+      /jobs           ← syncMatches.job.ts, syncScorers.job.ts, scoreMatchPredictions.job.ts,
+        scoreQualifierPredictions.job.ts, scoreStandingsPredictions.job.ts,
+        scoreAwardPredictions.job.ts, calculateScores.job.ts (orquestador), scheduler.ts
+        (cron cada 10 minutos: sync + cálculo de puntos)
       /scripts        ← seedRules.ts (siembra el catálogo Rule en Mongo)
       /utils          ← AppError.ts
       /types          ← enums.ts, express.d.ts (augmenta Request.user)
@@ -180,6 +184,37 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
 - `PUT /api/admin/award-results` (admin global): introduce/actualiza el resultado real
 - `GET /api/award-results` (cualquier usuario autenticado): consulta pública de resultados ya
   confirmados — útil para que la app muestre "el Pichichi real fue X" cuando se sepa
+
+## Cálculo de puntos (jobs de puntuación)
+Cuatro jobs independientes en `src/jobs/`, orquestados por `calculateScores.job.ts`
+(`POST /api/admin/calculate-scores`, admin global; y automático cada 10 min tras el sync, en
+`scheduler.ts`). Cada uno solo procesa predicciones con `status: 'pending'` y las marca
+`'scored'` al terminar — **idempotente**: repetir la ejecución no reprocesa ni duplica nada.
+
+- **`scoreMatchPredictions.job.ts`**: por cada `Match` `finished` con `Prediction` pendientes,
+  recorre los grupos del usuario, comprueba `isCompetitionEnabledForGroup` (opt-in de Copa del
+  Rey/Supercopa), calcula puntos con `resolveActiveRules(scope: 'match')` +
+  `resolveMultiplier`, y guarda `PredictionScore`.
+- **`scoreQualifierPredictions.job.ts`**: mismo patrón para partidos `isKnockout` `finished`.
+  Si acabó empatado a los 90' pero el admin aún no introdujo `realQualifier`, esas predicciones
+  se quedan `pending` (no se puntúan como fallo prematuramente).
+- **`scoreStandingsPredictions.job.ts`**: usa `standingsTable.service.ts` — **la tabla real se
+  calcula nosotros mismos** a partir de los partidos de La Liga ya guardados (no se sincroniza
+  aparte desde la API), sumando puntos/goles de los partidos `finished` con `matchday <=
+  19` (ida) o `<= 38` (vuelta). Solo puntúa una fase cuando está "completa" (cero partidos
+  `pending` hasta esa jornada).
+- **`scoreAwardPredictions.job.ts`**: solo puntúa si existe `AwardResult` para esa
+  `season`+`award`; compara contra la regla específica (`pichichi_correct` para Pichichi,
+  `zamora_correct` para Zamora — nunca se mezclan aunque una peña tenga las dos activas).
+- **`services/competitionEligibility.service.ts`**: `isCompetitionEnabledForGroup` — La Liga
+  siempre puntúa; Copa del Rey/Supercopa solo si están en `GroupRuleSettings.enabledCompetitions`.
+
+## Ranking por peña
+- `GET /api/groups/:groupId/ranking?season=X` (cualquier miembro): suma `PredictionScore` +
+  `QualifierPredictionScore` + `StandingsPredictionScore` + `AwardPredictionScore` filtrados por
+  `group`, agrupados por usuario, ordenado de mayor a menor puntuación.
+- Incluye a **todos los miembros de la peña**, aunque tengan 0 puntos (nadie "desaparece" del
+  ranking por no haber predicho nada todavía).
 
 ## Modelos de datos (MongoDB / Mongoose, TypeScript)
 
@@ -355,8 +390,14 @@ peña puede querer puntuaciones distintas.
       (elige equipos, fuerza `isKnockout: true`), `PUT /:id/result` (resultado final), `PUT
       /:id/qualifier` (solo si empate real a 90'). Probado end-to-end, incluida la integración
       real con `qualifier-predictions` (la limitación de la rama anterior queda resuelta).
-- [ ] Jobs de cálculo de puntos (partidos, clasificación, premios, clasificados en empates)
-- [ ] Endpoint de ranking por peña
+- [x] Jobs de cálculo de puntos: `scoreMatchPredictions`, `scoreQualifierPredictions`,
+      `scoreStandingsPredictions` (tabla real calculada de nuestros propios `Match`, no
+      sincronizada), `scoreAwardPredictions`, orquestados por `calculateScores.job.ts`
+      (`POST /api/admin/calculate-scores` + automático en el cron). Idempotente (solo procesa
+      `status: 'pending'`). Probado end-to-end (20 casos): las 4 puntuaciones, multiplicador,
+      opt-in de competición, no doble conteo, idempotencia verificada con segunda ejecución.
+- [x] `GET /api/groups/:groupId/ranking?season=X`: suma los 4 tipos de `*Score` por usuario,
+      incluye a todos los miembros aunque tengan 0 puntos. Probado end-to-end (6 casos).
 - [ ] Proyecto Expo (frontend) — pendiente de crear en `/app`
 
 ## Preferencias del usuario
