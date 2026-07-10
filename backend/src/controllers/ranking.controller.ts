@@ -22,9 +22,12 @@ export async function getGroupRanking(req: Request, res: Response): Promise<void
 
   const group = await requireGroupMember(groupId, req.user!.id);
 
+  const memberIds = group.members.map((m) => m.toString());
   const totals = new Map<string, number>();
-  for (const memberId of group.members) {
-    totals.set(memberId.toString(), 0);
+  const exactScores = new Map<string, number>();
+  for (const id of memberIds) {
+    totals.set(id, 0);
+    exactScores.set(id, 0);
   }
 
   function addPoints(userId: Types.ObjectId, points: number): void {
@@ -33,10 +36,10 @@ export async function getGroupRanking(req: Request, res: Response): Promise<void
   }
 
   // Partidos y "quién se clasifica" comparten Match -> se filtran por season a través de él.
-  const seasonMatches = await Match.find({ season }).select('_id');
+  const seasonMatches = await Match.find({ season }).select('_id homeScore awayScore status');
   const seasonMatchIds = seasonMatches.map((m) => m._id);
 
-  const predictions = await Prediction.find({ match: { $in: seasonMatchIds } }).select('_id user');
+  const predictions = await Prediction.find({ match: { $in: seasonMatchIds } }).select('_id user match predictedHome predictedAway');
   const predictionUserById = new Map(predictions.map((p) => [p._id.toString(), p.user]));
   const predictionScores = await PredictionScore.find({
     group: groupId,
@@ -45,6 +48,24 @@ export async function getGroupRanking(req: Request, res: Response): Promise<void
   for (const score of predictionScores) {
     const userId = predictionUserById.get(score.prediction.toString());
     if (userId) addPoints(userId, score.points);
+  }
+
+  // Conteo de resultados exactos (desempate)
+  const finishedMatchMap = new Map(
+    seasonMatches
+      .filter((m) => m.status === 'finished')
+      .map((m) => [m._id.toString(), m])
+  );
+  for (const pred of predictions) {
+    const match = finishedMatchMap.get(pred.match.toString());
+    if (
+      match &&
+      pred.predictedHome === match.homeScore &&
+      pred.predictedAway === match.awayScore
+    ) {
+      const key = pred.user.toString();
+      exactScores.set(key, (exactScores.get(key) ?? 0) + 1);
+    }
   }
 
   const qualifierPredictions = await QualifierPrediction.find({ match: { $in: seasonMatchIds } }).select('_id user');
@@ -80,15 +101,19 @@ export async function getGroupRanking(req: Request, res: Response): Promise<void
     if (userId) addPoints(userId, score.points);
   }
 
-  const users = await User.find({ _id: { $in: Array.from(totals.keys()) } }).select('alias email');
+  const users = await User.find({ _id: { $in: memberIds } }).select('alias email');
   const userById = new Map(users.map((u) => [(u._id as Types.ObjectId).toString(), u]));
 
   const ranking = Array.from(totals.entries())
     .map(([userId, points]) => ({
       user: { id: userId, alias: userById.get(userId)?.alias, email: userById.get(userId)?.email },
       points,
+      exactScores: exactScores.get(userId) ?? 0,
     }))
-    .sort((a, b) => b.points - a.points);
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      return b.exactScores - a.exactScores;
+    });
 
   res.json({ ranking });
 }
