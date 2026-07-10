@@ -85,14 +85,24 @@ export default function GroupDetailScreen() {
         </View>
       </Surface>
 
-      <Button
-        mode="contained"
-        icon="soccer"
-        style={styles.predictionsButton}
-        onPress={() => router.push({ pathname: '/predictions/[season]', params: { season: group.season } })}
-      >
-        Ver predicciones
-      </Button>
+      <View style={styles.actionButtons}>
+        <Button
+          mode="contained"
+          icon="soccer"
+          style={styles.actionButton}
+          onPress={() => router.push({ pathname: '/predictions/[season]', params: { season: group.season } })}
+        >
+          Predicciones
+        </Button>
+        <Button
+          mode="contained-tonal"
+          icon="trophy"
+          style={styles.actionButton}
+          onPress={() => router.push({ pathname: '/ranking/[groupId]', params: { groupId: group._id, season: group.season } })}
+        >
+          Ranking
+        </Button>
+      </View>
 
       <Divider style={styles.divider} />
 
@@ -138,8 +148,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     marginBottom: 16,
   },
-  predictionsButton: {
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 10,
     marginVertical: 4,
+  },
+  actionButton: {
+    flex: 1,
   },
   codeBox: {
     borderRadius: 8,
