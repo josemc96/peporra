@@ -71,6 +71,8 @@ function RootLayoutNav() {
               <Stack.Screen name="groups/[id]" options={{ title: 'Peña' }} />
               <Stack.Screen name="groups/create" options={{ presentation: 'modal', title: 'Nueva peña' }} />
               <Stack.Screen name="groups/join" options={{ presentation: 'modal', title: 'Unirse a peña' }} />
+              <Stack.Screen name="predictions/[season]" options={{ title: 'Predicciones' }} />
+              <Stack.Screen name="predictions/edit/[matchId]" options={{ presentation: 'modal', title: 'Tu predicción' }} />
             </Stack>
           </AuthGuard>
         </PaperProvider>

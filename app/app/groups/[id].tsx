@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Avatar, Button, Divider, List, Surface, Text } from 'react-native-paper';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
@@ -85,6 +85,15 @@ export default function GroupDetailScreen() {
         </View>
       </Surface>
 
+      <Button
+        mode="contained"
+        icon="soccer"
+        style={styles.predictionsButton}
+        onPress={() => router.push({ pathname: '/predictions/[season]', params: { season: group.season } })}
+      >
+        Ver predicciones
+      </Button>
+
       <Divider style={styles.divider} />
 
       <Text variant="titleSmall" style={styles.sectionTitle}>
@@ -128,6 +137,9 @@ const styles = StyleSheet.create({
   season: {
     opacity: 0.6,
     marginBottom: 16,
+  },
+  predictionsButton: {
+    marginVertical: 4,
   },
   codeBox: {
     borderRadius: 8,
