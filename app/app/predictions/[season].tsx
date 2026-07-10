@@ -118,7 +118,7 @@ export default function PredictionsScreen() {
     const firstPending = matchdays.find((day) =>
       matches.some((m) => m.matchday === day && new Date(m.startTime) > now)
     );
-    setSelectedMatchday(firstPending ?? matchdays[0]);
+    setSelectedMatchday(firstPending ?? matchdays[matchdays.length - 1]);
   }, [matches, matchdays]);
 
   const predictionMap = useMemo(() => {
