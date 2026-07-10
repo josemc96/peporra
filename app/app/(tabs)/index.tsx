@@ -1,26 +1,49 @@
+import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Card, FAB, Text } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { groupsApi, GroupSummary } from '@/api/groups';
+import { currentGroupStorage } from '@/config/currentGroup';
 
 function GroupCard({ group }: { group: GroupSummary }) {
   return (
-    <Card style={styles.card} onPress={() => router.push({ pathname: '/groups/[id]', params: { id: group._id } })}>
-      <Card.Title
-        title={group.name}
-        subtitle={`Temporada ${group.season}`}
-      />
+    <Card
+      style={styles.card}
+      onPress={() => router.push({ pathname: '/groups/[id]', params: { id: group._id } })}
+    >
+      <Card.Title title={group.name} subtitle={`Temporada ${group.season}`} />
     </Card>
   );
 }
 
 export default function GroupsScreen() {
+  const [checking, setChecking] = useState(true);
+
   const { data: groups, isLoading, isError, refetch } = useQuery({
     queryKey: ['groups'],
     queryFn: groupsApi.list,
+    enabled: !checking,
   });
+
+  useEffect(() => {
+    currentGroupStorage.get().then((groupId) => {
+      if (groupId) {
+        router.replace({ pathname: '/groups/[id]', params: { id: groupId } });
+      } else {
+        setChecking(false);
+      }
+    });
+  }, []);
+
+  if (checking) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -113,8 +136,6 @@ const styles = StyleSheet.create({
     gap: 8,
     alignItems: 'flex-end',
   },
-  fabPrimary: {
-  },
-  fabSecondary: {
-  },
+  fabPrimary: {},
+  fabSecondary: {},
 });

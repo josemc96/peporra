@@ -3,10 +3,11 @@ import { ActivityIndicator, Avatar, Button, Divider, List, Surface, Text } from 
 import { useLocalSearchParams, router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { groupsApi, GroupMember } from '@/api/groups';
 import { useAuth } from '@/context/AuthContext';
+import { currentGroupStorage } from '@/config/currentGroup';
 
 function MemberRow({ member, isAdmin }: { member: GroupMember; isAdmin: boolean }) {
   return (
@@ -37,6 +38,10 @@ export default function GroupDetailScreen() {
     queryFn: () => groupsApi.get(id),
     enabled: !!id,
   });
+
+  useEffect(() => {
+    if (id) currentGroupStorage.save(id);
+  }, [id]);
 
   async function copyCode() {
     if (!group) return;
@@ -126,6 +131,19 @@ export default function GroupDetailScreen() {
           </Text>
         </>
       )}
+
+      <Divider style={styles.divider} />
+
+      <Button
+        mode="text"
+        icon="swap-horizontal"
+        onPress={async () => {
+          await currentGroupStorage.clear();
+          router.replace('/(tabs)');
+        }}
+      >
+        Cambiar de peña
+      </Button>
     </ScrollView>
   );
 }

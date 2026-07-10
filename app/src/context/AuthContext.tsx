@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { apiFetch, tokenStorage } from '../api/client';
+import { currentGroupStorage } from '../config/currentGroup';
 
 export interface AuthUser {
   id: string;
@@ -75,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // si la llamada falla (p.ej. sin red) cerramos sesión igualmente en local
     }
     await tokenStorage.clear();
+    await currentGroupStorage.clear();
     setUser(null);
   }
 
