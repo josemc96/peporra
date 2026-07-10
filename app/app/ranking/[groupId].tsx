@@ -41,6 +41,11 @@ function RankingRow({
           {entry.user.alias}
           {isMe ? '  (tú)' : ''}
         </Text>
+        {entry.exactScores > 0 && (
+          <Text variant="labelSmall" style={styles.exactScores}>
+            {entry.exactScores} exacto{entry.exactScores !== 1 ? 's' : ''}
+          </Text>
+        )}
       </View>
 
       <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
@@ -152,6 +157,10 @@ const styles = StyleSheet.create({
   aliasMe: {
     color: '#1565C0',
     fontWeight: '700',
+  },
+  exactScores: {
+    opacity: 0.5,
+    marginTop: 1,
   },
   points: {
     fontWeight: '700',

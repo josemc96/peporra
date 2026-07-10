@@ -7,6 +7,7 @@ export interface RankingEntry {
     email: string;
   };
   points: number;
+  exactScores: number;
 }
 
 export const rankingApi = {
