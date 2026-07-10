@@ -398,7 +398,69 @@ peña puede querer puntuaciones distintas.
       opt-in de competición, no doble conteo, idempotencia verificada con segunda ejecución.
 - [x] `GET /api/groups/:groupId/ranking?season=X`: suma los 4 tipos de `*Score` por usuario,
       incluye a todos los miembros aunque tengan 0 puntos. Probado end-to-end (6 casos).
-- [ ] Proyecto Expo (frontend) — pendiente de crear en `/app`
+- [~] Proyecto Expo (frontend) — en progreso, ver sección "Frontend Expo" abajo
+
+## Frontend Expo
+
+Backend 100% terminado (ver checklist arriba). El frontend es una app Expo (React Native)
+en `peporra/app/`, pensada para compilar a **iOS + Android + Web** desde el mismo código
+(Expo tiene soporte de Web integrado, no hace falta un proyecto aparte).
+
+### Decisiones técnicas
+- **Routing**: Expo Router (basado en archivos, como Next.js App Router)
+- **Datos del servidor**: TanStack Query (React Query)
+- **HTTP**: `fetch` nativo envuelto en un cliente propio (`src/api/client.ts`), no `axios`
+- **UI**: React Native Paper (Material Design)
+- **Auth token storage**: `expo-secure-store` en móvil, `localStorage` en web (abstraído en
+  `src/config/storage.ts`)
+- **Estado de sesión**: `AuthContext` (React Context), sin Redux/Zustand
+- **Importante**: el SDK de Expo (57 en el momento de crear el proyecto) es muy posterior al
+  conocimiento de entrenamiento de Claude — el propio scaffold generó un `app/AGENTS.md`
+  avisando de esto. Para evitar sintaxis obsoleta, el proyecto se generó con la plantilla
+  oficial `tabs` de Expo (`npx create-expo-app app --template tabs`) y se usó su código real
+  como referencia de las convenciones actuales de Expo Router, en vez de fiarse de memoria.
+
+### Estructura (dentro de `peporra/app/`)
+```
+app/                        ← rutas (Expo Router; sí, "app/app/" es lo normal en Expo)
+  (tabs)/
+    _layout.tsx              ← barra de pestañas: Peñas | Perfil
+    index.tsx                ← "Mis peñas" (por ahora: pantalla de test de conexión a /health)
+    profile.tsx               ← perfil + logout
+  +not-found.tsx
+  _layout.tsx                ← layout raíz: QueryClientProvider + AuthProvider + PaperProvider
+src/
+  api/client.ts               ← fetch con Authorization Bearer + refresco automático en 401
+  config/env.ts                ← EXPO_PUBLIC_API_URL (obligatoria, lanza si falta)
+  config/storage.ts             ← wrapper SecureStore (móvil) / localStorage (web)
+  config/queryClient.ts
+  context/AuthContext.tsx        ← login/register/logout/restaurar sesión, ya funcional
+  components/useColorScheme.ts(.web.ts)
+.env / .env.example            ← EXPO_PUBLIC_API_URL=http://<IP-LOCAL>:4000/api
+```
+
+### Conectividad con el backend en desarrollo
+El móvil (Expo Go) no puede usar `localhost` — necesita la IP LAN del ordenador
+(`ipconfig` → interfaz WiFi). Hace falta:
+1. `app/.env` → `EXPO_PUBLIC_API_URL=http://<IP-LOCAL>:4000/api`
+2. Regla de Firewall de Windows permitiendo TCP 4000 en el perfil **Privado**:
+   `New-NetFirewallRule -DisplayName "Peporra backend (dev, puerto 4000)" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 4000 -Profile Private`
+   (requiere PowerShell como administrador — bloqueado en el PC del trabajo por permisos)
+3. Móvil y ordenador en la misma red WiFi
+
+### Plan de ramas (mismo patrón que el backend: una rama por bloque, probada antes de mergear)
+1. **`feature/expo-scaffold`** (en progreso, sin mergear) — proyecto creado, Router + Paper +
+   React Query + AuthContext + cliente API, todo compila (`tsc --noEmit` limpio). **Pendiente:
+   verificar en Expo Go real** (bloqueado en el PC del trabajo por el Firewall — continuar en
+   PC personal: `git checkout feature/expo-scaffold`, `cd app`, `npm install`, `npx expo start`,
+   confirmar que la pestaña "Peñas" muestra "✓ Conectado" contra `/health`).
+2. `feature/frontend-auth` — pantallas de login/registro reales (el `AuthContext` ya está listo)
+3. `feature/frontend-groups` — listar/crear/unirme/ver peñas
+4. `feature/frontend-predictions` — lista de partidos de una peña + editor de predicción
+5. `feature/frontend-ranking` — pantalla de ranking
+
+v1 = camino crítico (login → peñas → predicciones → ranking). Clasificación, Pichichi/Zamora,
+goleadores, "quién se clasifica" y paneles de admin se abordan en fases posteriores.
 
 ## Preferencias del usuario
 - Prefiere respuestas concisas y prácticas
