@@ -66,7 +66,7 @@ export function GroupDetail({ groupId, onLeave }: Props) {
   const isGroupAdmin = user?.id === group.admin._id;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <Text variant="headlineSmall" style={styles.groupName}>{group.name}</Text>
       <Text variant="bodyMedium" style={styles.season}>Temporada {group.season}</Text>
 
@@ -130,6 +130,7 @@ export function GroupDetail({ groupId, onLeave }: Props) {
 }
 
 const styles = StyleSheet.create({
+  scroll: { flex: 1 },
   container: { padding: 16, gap: 8 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   groupName: { marginBottom: 2 },
