@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Card, Chip, Text } from 'react-native-paper';
+import { FlatList, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Button, Card, IconButton, Text } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
@@ -142,26 +142,29 @@ export default function PredictionsScreen() {
     );
   }
 
+  const currentIdx = matchdays.indexOf(selectedMatchday);
+
   return (
     <View style={styles.container}>
-      {/* Selector de jornada */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRow}
-      >
-        {matchdays.map((day) => (
-          <Chip
-            key={day}
-            selected={day === selectedMatchday}
-            onPress={() => setSelectedMatchday(day)}
-            style={styles.chip}
-            compact
-          >
-            J{day}
-          </Chip>
-        ))}
-      </ScrollView>
+      {/* Navegación de jornada */}
+      <View style={styles.matchdayNav}>
+        <IconButton
+          icon="chevron-left"
+          size={28}
+          onPress={() => setSelectedMatchday(matchdays[currentIdx - 1])}
+          disabled={currentIdx <= 0}
+        />
+        <Text variant="titleMedium" style={styles.matchdayLabel}>
+          Jornada {selectedMatchday}
+          <Text variant="bodySmall" style={styles.matchdayTotal}> / {matchdays.length}</Text>
+        </Text>
+        <IconButton
+          icon="chevron-right"
+          size={28}
+          onPress={() => setSelectedMatchday(matchdays[currentIdx + 1])}
+          disabled={currentIdx >= matchdays.length - 1}
+        />
+      </View>
 
       {/* Lista de partidos */}
       <FlatList
@@ -189,13 +192,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  chipRow: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 6,
+  matchdayNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ccc',
   },
-  chip: {
-    marginRight: 2,
+  matchdayLabel: {
+    fontWeight: '600',
+  },
+  matchdayTotal: {
+    opacity: 0.4,
+    fontWeight: 'normal',
   },
   list: {
     padding: 12,
