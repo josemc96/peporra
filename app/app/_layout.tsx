@@ -68,6 +68,9 @@ function RootLayoutNav() {
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="login" options={{ headerShown: false }} />
               <Stack.Screen name="register" options={{ headerShown: false }} />
+              <Stack.Screen name="groups/[id]" options={{ title: 'Peña' }} />
+              <Stack.Screen name="groups/create" options={{ presentation: 'modal', title: 'Nueva peña' }} />
+              <Stack.Screen name="groups/join" options={{ presentation: 'modal', title: 'Unirse a peña' }} />
             </Stack>
           </AuthGuard>
         </PaperProvider>
