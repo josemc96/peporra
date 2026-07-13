@@ -78,6 +78,7 @@ function RootLayoutNav() {
               <Stack.Screen name="ranking/[groupId]" options={{ title: 'Ranking' }} />
               <Stack.Screen name="standings-prediction/[season]" options={{ title: 'Clasificación' }} />
               <Stack.Screen name="award-prediction/[season]" options={{ title: 'Premios' }} />
+              <Stack.Screen name="knockout/[season]" options={{ title: 'Copa / Supercopa' }} />
             </Stack>
             </AuthGuard>
           </PaperProvider>
