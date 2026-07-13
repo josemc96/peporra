@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
   Chip,
-  IconButton,
+  Icon,
   Surface,
   Text,
   useTheme,
 } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { standingsPredictionsApi } from '@/api/standingsPredictions';
 
@@ -23,7 +28,6 @@ export default function StandingsPredictionScreen() {
 
   const [phase, setPhase] = useState<Phase>('ida');
   const [teamOrder, setTeamOrder] = useState<string[]>([]);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [saved, setSaved] = useState(false);
 
   const { data: teams, isLoading: teamsLoading } = useQuery({
@@ -46,7 +50,6 @@ export default function StandingsPredictionScreen() {
     } else {
       setTeamOrder([...teams]);
     }
-    setSelectedIdx(null);
     setSaved(false);
   }, [prediction, teams, phase]);
 
@@ -63,28 +66,35 @@ export default function StandingsPredictionScreen() {
     },
   });
 
-  function swap(a: number, b: number) {
-    setTeamOrder((prev) => {
-      const next = [...prev];
-      [next[a], next[b]] = [next[b], next[a]];
-      return next;
-    });
-    setSelectedIdx(null);
-    setSaved(false);
-  }
-
-  function handleRowTap(idx: number) {
-    if (selectedIdx === null) {
-      setSelectedIdx(idx);
-    } else if (selectedIdx === idx) {
-      setSelectedIdx(null);
-    } else {
-      swap(selectedIdx, idx);
-    }
-  }
-
   const isLoading = teamsLoading || predLoading;
   const isLocked = prediction?.status === 'scored';
+
+  function renderItem({ item, drag, isActive, getIndex }: RenderItemParams<string>) {
+    const idx = getIndex() ?? 0;
+    return (
+      <ScaleDecorator>
+        <Surface
+          style={[styles.row, isActive && { backgroundColor: theme.colors.primaryContainer }]}
+          elevation={isActive ? 4 : 1}
+        >
+          <Text
+            variant="titleMedium"
+            style={[styles.pos, { color: theme.colors.onSurfaceVariant }]}
+          >
+            {idx + 1}
+          </Text>
+          <Text variant="bodyLarge" style={styles.teamName}>
+            {item}
+          </Text>
+          {!isLocked && (
+            <View style={styles.handle} onTouchStart={drag}>
+              <Icon source="drag" size={24} color={theme.colors.onSurfaceVariant} />
+            </View>
+          )}
+        </Surface>
+      </ScaleDecorator>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -103,7 +113,7 @@ export default function StandingsPredictionScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <GestureHandlerRootView style={styles.root}>
       <View style={styles.phaseRow}>
         <Chip selected={phase === 'ida'} onPress={() => setPhase('ida')} style={styles.chip}>
           Ida (J19)
@@ -113,69 +123,32 @@ export default function StandingsPredictionScreen() {
         </Chip>
       </View>
 
-      {selectedIdx !== null && (
-        <Text variant="labelMedium" style={[styles.hint, { color: theme.colors.primary }]}>
-          «{teamOrder[selectedIdx]}» seleccionado — toca otro equipo para intercambiar
+      {!isLocked && (
+        <Text variant="labelSmall" style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
+          Mantén pulsado el icono ≡ y arrastra para reordenar
         </Text>
       )}
-
       {isLocked && (
         <Text variant="labelSmall" style={styles.lockedNote}>
           Predicción puntuada — solo lectura
         </Text>
       )}
 
-      <ScrollView contentContainerStyle={styles.list}>
-        {teamOrder.map((team, idx) => {
-          const isSelected = selectedIdx === idx;
-          return (
-            <TouchableOpacity
-              key={team}
-              activeOpacity={isLocked ? 1 : 0.7}
-              onPress={isLocked ? undefined : () => handleRowTap(idx)}
-            >
-              <Surface
-                style={[
-                  styles.row,
-                  isSelected && { backgroundColor: theme.colors.primaryContainer },
-                ]}
-                elevation={1}
-              >
-                <Text
-                  variant="titleMedium"
-                  style={[styles.pos, { color: theme.colors.onSurfaceVariant }]}
-                >
-                  {idx + 1}
-                </Text>
-                <Text variant="bodyLarge" style={styles.teamName}>
-                  {team}
-                </Text>
-                {!isLocked && (
-                  <View style={styles.arrows}>
-                    <IconButton
-                      icon="chevron-up"
-                      size={20}
-                      disabled={idx === 0}
-                      onPress={(e) => { e.stopPropagation?.(); swap(idx - 1, idx); }}
-                    />
-                    <IconButton
-                      icon="chevron-down"
-                      size={20}
-                      disabled={idx === teamOrder.length - 1}
-                      onPress={(e) => { e.stopPropagation?.(); swap(idx, idx + 1); }}
-                    />
-                  </View>
-                )}
-              </Surface>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      <DraggableFlatList
+        data={teamOrder}
+        keyExtractor={(item) => item}
+        onDragEnd={({ data }) => { setTeamOrder(data); setSaved(false); }}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+      />
 
       {!isLocked && (
         <View style={styles.footer}>
           {saved && (
-            <Text variant="labelMedium" style={{ color: theme.colors.primary, textAlign: 'center' }}>
+            <Text
+              variant="labelMedium"
+              style={{ color: theme.colors.primary, textAlign: 'center' }}
+            >
               ✓ Predicción guardada
             </Text>
           )}
@@ -189,28 +162,27 @@ export default function StandingsPredictionScreen() {
           </Button>
         </View>
       )}
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  phaseRow: { flexDirection: 'row', gap: 8, padding: 16, paddingBottom: 8 },
+  phaseRow: { flexDirection: 'row', gap: 8, padding: 16, paddingBottom: 4 },
   chip: { flex: 1 },
-  hint: { textAlign: 'center', paddingHorizontal: 16, paddingBottom: 4 },
-  lockedNote: { textAlign: 'center', opacity: 0.5, paddingHorizontal: 16, paddingBottom: 4 },
+  hint: { textAlign: 'center', paddingHorizontal: 16, paddingBottom: 8, opacity: 0.6 },
+  lockedNote: { textAlign: 'center', opacity: 0.5, paddingHorizontal: 16, paddingBottom: 8 },
   list: { padding: 12, gap: 6, paddingBottom: 24 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 8,
     paddingLeft: 12,
-    paddingRight: 4,
-    paddingVertical: 4,
+    paddingVertical: 10,
   },
   pos: { width: 32, fontVariant: ['tabular-nums'] },
   teamName: { flex: 1 },
-  arrows: { flexDirection: 'row' },
+  handle: { padding: 12 },
   footer: { padding: 16, gap: 8 },
 });
