@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { syncLaLigaMatches } from './syncMatches.job';
 import { syncTopScorers } from './syncScorers.job';
 import { calculateScores } from './calculateScores.job';
+import { dealCards } from './dealCards.job';
 
 export function startScheduledJobs(): void {
   if (!env.footballApiKey) {
@@ -33,6 +34,13 @@ export function startScheduledJobs(): void {
       console.log(`Cálculo de puntos: ${JSON.stringify(result)}`);
     } catch (err) {
       console.error('Error al calcular puntos:', err);
+    }
+
+    try {
+      const result = await dealCards();
+      if (result.dealt > 0) console.log(`Reparto de cartas: ${result.dealt} cartas repartidas`);
+    } catch (err) {
+      console.error('Error al repartir cartas:', err);
     }
   });
 }
