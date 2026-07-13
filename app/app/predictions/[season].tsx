@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Card, IconButton, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Card, Chip, IconButton, Text } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { predictionsApi, Match, Prediction } from '@/api/predictions';
+import { adminGroupApi, ScoreMultiplier } from '@/api/adminGroup';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -13,14 +14,29 @@ function formatDateTime(iso: string): string {
   });
 }
 
+function resolveMultiplier(
+  match: Match,
+  multipliers: ScoreMultiplier[]
+): number | null {
+  const matchMult = multipliers.find((m) => m.scope === 'match' && m.match === match._id);
+  if (matchMult) return matchMult.multiplier;
+  if (match.matchday != null) {
+    const dayMult = multipliers.find((m) => m.scope === 'matchday' && m.matchday === match.matchday);
+    if (dayMult) return dayMult.multiplier;
+  }
+  return null;
+}
+
 function MatchCard({
   match,
   prediction,
   season,
+  multiplier,
 }: {
   match: Match;
   prediction: Prediction | undefined;
   season: string;
+  multiplier: number | null;
 }) {
   const isLocked = new Date() >= new Date(match.startTime);
   const hasPrediction = prediction !== undefined;
@@ -51,6 +67,11 @@ function MatchCard({
           <Text variant="titleSmall" style={[styles.team, styles.teamRight]} numberOfLines={1}>
             {match.awayTeam}
           </Text>
+          {multiplier != null && (
+            <Chip compact style={styles.multChip} textStyle={styles.multText}>
+              ×{multiplier}
+            </Chip>
+          )}
         </View>
 
         <Text variant="labelSmall" style={styles.dateText}>
@@ -86,7 +107,7 @@ function MatchCard({
 }
 
 export default function PredictionsScreen() {
-  const { season } = useLocalSearchParams<{ season: string }>();
+  const { season, groupId } = useLocalSearchParams<{ season: string; groupId?: string }>();
   const [selectedMatchday, setSelectedMatchday] = useState<number>(1);
 
   const { data: matches, isLoading: loadingMatches } = useQuery({
@@ -97,6 +118,13 @@ export default function PredictionsScreen() {
   const { data: predictions, isLoading: loadingPredictions } = useQuery({
     queryKey: ['predictions', season],
     queryFn: () => predictionsApi.listMyPredictions(season),
+  });
+
+  const { data: multipliers } = useQuery({
+    queryKey: ['multipliers', groupId, season],
+    queryFn: () => adminGroupApi.listMultipliers(groupId!, season),
+    enabled: !!groupId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const matchdays = useMemo(() => {
@@ -175,6 +203,7 @@ export default function PredictionsScreen() {
             match={item}
             prediction={predictionMap.get(item._id)}
             season={season}
+            multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
           />
         )}
         contentContainerStyle={styles.list}
@@ -231,6 +260,15 @@ const styles = StyleSheet.create({
   },
   vs: {
     opacity: 0.5,
+  },
+  multChip: {
+    backgroundColor: '#F59E0B',
+    height: 24,
+  },
+  multText: {
+    color: '#1C1917',
+    fontWeight: '700',
+    fontSize: 12,
   },
   dateText: {
     opacity: 0.5,

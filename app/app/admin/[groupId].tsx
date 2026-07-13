@@ -7,6 +7,7 @@ import {
   Divider,
   IconButton,
   List,
+  Surface,
   Switch,
   Text,
   TextInput,
@@ -16,18 +17,19 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminGroupApi, RuleEntry } from '@/api/adminGroup';
-import { predictionsApi } from '@/api/predictions';
+import { adminMatchesApi } from '@/api/adminMatches';
+import { predictionsApi, Match } from '@/api/predictions';
+import { useAuth } from '@/context/AuthContext';
 
-// ─── Rule row ────────────────────────────────────────────────────────────────
+// ─── Rule row ──────────────────────────────────────────────────────────────
 
 function RuleRow({
   entry,
   onChange,
 }: {
-  entry: RuleEntry & { _dirty?: boolean };
+  entry: RuleEntry;
   onChange: (key: string, patch: { points?: number; active?: boolean }) => void;
 }) {
-  const theme = useTheme();
   return (
     <View style={styles.ruleRow}>
       <View style={styles.ruleInfo}>
@@ -37,37 +39,110 @@ function RuleRow({
       <View style={styles.ruleControls}>
         <TextInput
           value={String(entry.points)}
-          onChangeText={(v) => {
-            const n = parseInt(v, 10);
-            if (!isNaN(n) && n >= 0) onChange(entry.rule.key, { points: n });
-          }}
+          onChangeText={(v) => { const n = parseInt(v, 10); if (!isNaN(n) && n >= 0) onChange(entry.rule.key, { points: n }); }}
           keyboardType="numeric"
           mode="outlined"
           dense
           style={styles.pointsInput}
           label="pts"
         />
-        <Switch
-          value={entry.active}
-          onValueChange={(v) => onChange(entry.rule.key, { active: v })}
-          color={theme.colors.primary}
-        />
+        <Switch value={entry.active} onValueChange={(v) => onChange(entry.rule.key, { active: v })} />
       </View>
     </View>
   );
 }
 
-// ─── Main screen ─────────────────────────────────────────────────────────────
+// ─── Match admin card ───────────────────────────────────────────────────────
+
+function MatchAdminCard({ match, season }: { match: Match; season: string }) {
+  const theme = useTheme();
+  const qc = useQueryClient();
+  const [homeScore, setHomeScore] = useState('');
+  const [awayScore, setAwayScore] = useState('');
+  const [showResultForm, setShowResultForm] = useState(false);
+
+  const { mutate: saveResult, isPending: savingResult } = useMutation({
+    mutationFn: () => adminMatchesApi.setResult(match._id, parseInt(homeScore), parseInt(awayScore)),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['knockout-admin-matches', season] }); setShowResultForm(false); },
+  });
+
+  const { mutate: saveQualifier, isPending: savingQualifier } = useMutation({
+    mutationFn: (q: 'home' | 'away') => adminMatchesApi.setQualifier(match._id, q),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['knockout-admin-matches', season] }),
+  });
+
+  const isFinished = match.status === 'finished';
+  const isDraw = isFinished && match.homeScore === match.awayScore;
+  const needsQualifier = isDraw && !match.realQualifier;
+  const competitionLabel = match.competition === 'copa_del_rey' ? 'Copa del Rey' : 'Supercopa';
+
+  return (
+    <Surface style={styles.matchCard} elevation={2}>
+      <Text variant="labelSmall" style={{ opacity: 0.5, textTransform: 'uppercase', letterSpacing: 1 }}>
+        {competitionLabel}
+      </Text>
+      <Text variant="titleMedium">
+        {match.homeTeam} vs {match.awayTeam}
+      </Text>
+      <Text variant="bodySmall" style={{ opacity: 0.6 }}>
+        {new Date(match.startTime).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
+      </Text>
+
+      {isFinished && (
+        <Text variant="bodyMedium" style={{ marginTop: 4 }}>
+          Resultado: {match.homeScore} - {match.awayScore}
+          {match.realQualifier && ` · Clasifica: ${match.realQualifier === 'home' ? match.homeTeam : match.awayTeam}`}
+        </Text>
+      )}
+
+      {!isFinished && !showResultForm && (
+        <Button mode="outlined" compact style={{ marginTop: 8, alignSelf: 'flex-start' }} onPress={() => setShowResultForm(true)}>
+          Añadir resultado
+        </Button>
+      )}
+
+      {showResultForm && (
+        <View style={styles.resultForm}>
+          <TextInput label={match.homeTeam} value={homeScore} onChangeText={setHomeScore} keyboardType="numeric" mode="outlined" dense style={styles.scoreInput} />
+          <Text variant="headlineSmall" style={{ opacity: 0.4 }}>-</Text>
+          <TextInput label={match.awayTeam} value={awayScore} onChangeText={setAwayScore} keyboardType="numeric" mode="outlined" dense style={styles.scoreInput} />
+          <Button mode="contained" compact onPress={() => saveResult()} loading={savingResult}
+            disabled={savingResult || homeScore === '' || awayScore === ''}>
+            Guardar
+          </Button>
+          <Button mode="text" compact onPress={() => setShowResultForm(false)}>Cancelar</Button>
+        </View>
+      )}
+
+      {needsQualifier && (
+        <View style={{ marginTop: 8, gap: 4 }}>
+          <Text variant="labelMedium">Empate — ¿quién se clasifica?</Text>
+          <View style={styles.qualRow}>
+            <Button mode="contained-tonal" onPress={() => saveQualifier('home')} loading={savingQualifier} disabled={savingQualifier}>
+              {match.homeTeam}
+            </Button>
+            <Button mode="contained-tonal" onPress={() => saveQualifier('away')} loading={savingQualifier} disabled={savingQualifier}>
+              {match.awayTeam}
+            </Button>
+          </View>
+        </View>
+      )}
+    </Surface>
+  );
+}
+
+// ─── Main screen ───────────────────────────────────────────────────────────
 
 export default function AdminPanelScreen() {
   const { groupId, season } = useLocalSearchParams<{ groupId: string; season: string }>();
+  const { user } = useAuth();
   const theme = useTheme();
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState<'rules' | 'multipliers'>('rules');
+  const [tab, setTab] = useState<'rules' | 'multipliers' | 'matches'>('rules');
 
-  // ── Rules state ──
-  const [localRules, setLocalRules] = useState<(RuleEntry & { _dirty?: boolean })[] | null>(null);
+  // ── Rules ──────────────────────────────────────────────────────────────────
+  const [localRules, setLocalRules] = useState<RuleEntry[] | null>(null);
   const [localComps, setLocalComps] = useState<('copa_del_rey' | 'supercopa')[] | null>(null);
   const [rulesSaved, setRulesSaved] = useState(false);
 
@@ -75,44 +150,31 @@ export default function AdminPanelScreen() {
     queryKey: ['rule-settings', groupId, season],
     queryFn: () => adminGroupApi.getRuleSettings(groupId, season),
   });
-
-  // Initialise local state once on first load
   if (settingsData && !localRules) {
     setLocalRules(settingsData.rules.map((r) => ({ ...r })));
     setLocalComps(settingsData.enabledCompetitions ?? []);
   }
 
   const { mutate: saveRules, isPending: savingRules } = useMutation({
-    mutationFn: () => {
-      const dirtyRules = (localRules ?? []).map((r) => ({
-        key: r.rule.key,
-        points: r.points,
-        active: r.active,
-      }));
-      return adminGroupApi.updateRuleSettings(groupId, season, dirtyRules, localComps ?? []);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rule-settings', groupId, season] });
-      setRulesSaved(true);
-    },
+    mutationFn: () => adminGroupApi.updateRuleSettings(
+      groupId, season,
+      (localRules ?? []).map((r) => ({ key: r.rule.key, points: r.points, active: r.active })),
+      localComps ?? []
+    ),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['rule-settings', groupId, season] }); setRulesSaved(true); },
   });
 
   function patchRule(key: string, patch: { points?: number; active?: boolean }) {
-    setLocalRules((prev) =>
-      (prev ?? []).map((r) => (r.rule.key === key ? { ...r, ...patch } : r))
-    );
+    setLocalRules((prev) => (prev ?? []).map((r) => r.rule.key === key ? { ...r, ...patch } : r));
     setRulesSaved(false);
   }
 
   function toggleComp(comp: 'copa_del_rey' | 'supercopa') {
-    setLocalComps((prev) => {
-      const cur = prev ?? [];
-      return cur.includes(comp) ? cur.filter((c) => c !== comp) : [...cur, comp];
-    });
+    setLocalComps((prev) => { const c = prev ?? []; return c.includes(comp) ? c.filter((x) => x !== comp) : [...c, comp]; });
     setRulesSaved(false);
   }
 
-  // ── Multipliers state ──
+  // ── Multipliers ────────────────────────────────────────────────────────────
   const [newScope, setNewScope] = useState<'match' | 'matchday'>('matchday');
   const [newMatchday, setNewMatchday] = useState('');
   const [newMatchId, setNewMatchId] = useState('');
@@ -124,27 +186,23 @@ export default function AdminPanelScreen() {
     enabled: tab === 'multipliers',
   });
 
-  const { data: matches } = useQuery({
+  const { data: allMatches } = useQuery({
     queryKey: ['matches', season],
     queryFn: () => predictionsApi.listMatches(season),
-    enabled: tab === 'multipliers' && newScope === 'match',
+    enabled: tab === 'multipliers',
+    staleTime: Infinity,
   });
 
+  const matchById = new Map((allMatches ?? []).map((m) => [m._id, m]));
+
   const { mutate: createMult, isPending: creatingMult } = useMutation({
-    mutationFn: () =>
-      adminGroupApi.createMultiplier(groupId, {
-        season,
-        scope: newScope,
-        match: newScope === 'match' ? newMatchId : undefined,
-        matchday: newScope === 'matchday' ? parseInt(newMatchday, 10) : undefined,
-        multiplier: parseInt(newValue, 10),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['multipliers', groupId, season] });
-      setNewMatchday('');
-      setNewMatchId('');
-      setNewValue('2');
-    },
+    mutationFn: () => adminGroupApi.createMultiplier(groupId, {
+      season, scope: newScope,
+      match: newScope === 'match' ? newMatchId : undefined,
+      matchday: newScope === 'matchday' ? parseInt(newMatchday, 10) : undefined,
+      multiplier: parseInt(newValue, 10),
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['multipliers', groupId, season] }); setNewMatchday(''); setNewMatchId(''); setNewValue('2'); },
   });
 
   const { mutate: deleteMult } = useMutation({
@@ -152,199 +210,169 @@ export default function AdminPanelScreen() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['multipliers', groupId, season] }),
   });
 
-  const canCreateMult =
-    parseInt(newValue, 10) >= 1 &&
-    (newScope === 'matchday'
-      ? parseInt(newMatchday, 10) >= 1 && parseInt(newMatchday, 10) <= 38
-      : newMatchId.length > 0);
+  const canCreateMult = parseInt(newValue, 10) >= 1 && (
+    newScope === 'matchday' ? parseInt(newMatchday, 10) >= 1 : newMatchId.length > 0
+  );
+
+  // ── Matches (global admin only) ────────────────────────────────────────────
+  const isGlobalAdmin = user?.role === 'admin';
+  const [newCompetition, setNewCompetition] = useState<'copa_del_rey' | 'supercopa'>('copa_del_rey');
+  const [newHome, setNewHome] = useState('');
+  const [newAway, setNewAway] = useState('');
+  const [newDate, setNewDate] = useState('');
+  const [newTime, setNewTime] = useState('');
+
+  const { data: knockoutMatches, isLoading: knockoutLoading } = useQuery({
+    queryKey: ['knockout-admin-matches', season],
+    queryFn: () => Promise.all([
+      predictionsApi.listMatches(season).then((ms) => ms.filter((m) => m.isKnockout)),
+    ]).then(([ms]) => ms),
+    enabled: tab === 'matches',
+  });
+
+  const { mutate: createMatch, isPending: creatingMatch } = useMutation({
+    mutationFn: () => {
+      const startTime = new Date(`${newDate}T${newTime || '20:00'}:00`).toISOString();
+      return adminMatchesApi.create({ season, competition: newCompetition, homeTeam: newHome.trim(), awayTeam: newAway.trim(), startTime });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['knockout-admin-matches', season] });
+      qc.invalidateQueries({ queryKey: ['knockout-matches', season] });
+      setNewHome(''); setNewAway(''); setNewDate(''); setNewTime('');
+    },
+  });
+
+  const canCreateMatch = newHome.trim().length > 0 && newAway.trim().length > 0 && newDate.length === 10;
+
+  // ── Tabs ───────────────────────────────────────────────────────────────────
+  const tabs: Array<{ key: 'rules' | 'multipliers' | 'matches'; label: string }> = [
+    { key: 'rules', label: 'Reglas' },
+    { key: 'multipliers', label: 'Multiplicadores' },
+    ...(isGlobalAdmin ? [{ key: 'matches' as const, label: 'Partidos' }] : []),
+  ];
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      {/* Tab selector */}
       <View style={styles.tabRow}>
-        <Chip selected={tab === 'rules'} onPress={() => setTab('rules')} style={styles.chip}>
-          Reglas
-        </Chip>
-        <Chip selected={tab === 'multipliers'} onPress={() => setTab('multipliers')} style={styles.chip}>
-          Multiplicadores
-        </Chip>
+        {tabs.map((t) => (
+          <Chip key={t.key} selected={tab === t.key} onPress={() => setTab(t.key)} style={{ flex: 1 }}>
+            {t.label}
+          </Chip>
+        ))}
       </View>
 
-      {/* ── RULES TAB ── */}
+      {/* ── RULES ── */}
       {tab === 'rules' && (
-        <>
-          {settingsLoading || !localRules ? (
-            <ActivityIndicator style={{ marginTop: 24 }} />
-          ) : (
-            <>
-              <Text variant="titleSmall" style={styles.sectionTitle}>Puntuación de partidos</Text>
-              {localRules
-                .filter((r) => r.rule.scope === 'match')
-                .map((r) => (
-                  <RuleRow key={r.rule.key} entry={r} onChange={patchRule} />
-                ))}
+        settingsLoading || !localRules ? <ActivityIndicator style={{ marginTop: 24 }} /> : (
+          <>
+            {(['match', 'standings', 'award', 'knockout'] as const).map((scope) => {
+              const scopeLabel: Record<string, string> = { match: 'Partidos', standings: 'Clasificación', award: 'Premios', knockout: 'Eliminatorias' };
+              const scopeRules = localRules.filter((r) => r.rule.scope === scope);
+              if (!scopeRules.length) return null;
+              return (
+                <View key={scope}>
+                  <Text variant="titleSmall" style={styles.sectionTitle}>{scopeLabel[scope]}</Text>
+                  {scopeRules.map((r) => <RuleRow key={r.rule.key} entry={r} onChange={patchRule} />)}
+                  <Divider style={styles.divider} />
+                </View>
+              );
+            })}
 
-              <Divider style={styles.divider} />
-              <Text variant="titleSmall" style={styles.sectionTitle}>Clasificación</Text>
-              {localRules
-                .filter((r) => r.rule.scope === 'standings')
-                .map((r) => (
-                  <RuleRow key={r.rule.key} entry={r} onChange={patchRule} />
-                ))}
+            <Text variant="titleSmall" style={styles.sectionTitle}>Competiciones activas</Text>
+            <View style={styles.tabRow}>
+              <Chip selected={(localComps ?? []).includes('copa_del_rey')} onPress={() => toggleComp('copa_del_rey')} style={{ flex: 1 }}>Copa del Rey</Chip>
+              <Chip selected={(localComps ?? []).includes('supercopa')} onPress={() => toggleComp('supercopa')} style={{ flex: 1 }}>Supercopa</Chip>
+            </View>
+            <Text variant="labelSmall" style={styles.compNote}>Las competiciones desactivadas no generan puntos.</Text>
 
-              <Divider style={styles.divider} />
-              <Text variant="titleSmall" style={styles.sectionTitle}>Premios (Pichichi / Zamora)</Text>
-              {localRules
-                .filter((r) => r.rule.scope === 'award')
-                .map((r) => (
-                  <RuleRow key={r.rule.key} entry={r} onChange={patchRule} />
-                ))}
-
-              <Divider style={styles.divider} />
-              <Text variant="titleSmall" style={styles.sectionTitle}>Eliminatorias</Text>
-              {localRules
-                .filter((r) => r.rule.scope === 'knockout')
-                .map((r) => (
-                  <RuleRow key={r.rule.key} entry={r} onChange={patchRule} />
-                ))}
-
-              <Divider style={styles.divider} />
-              <Text variant="titleSmall" style={styles.sectionTitle}>Competiciones activas</Text>
-              <View style={styles.compRow}>
-                <Chip
-                  selected={(localComps ?? []).includes('copa_del_rey')}
-                  onPress={() => toggleComp('copa_del_rey')}
-                  style={styles.chip}
-                >
-                  Copa del Rey
-                </Chip>
-                <Chip
-                  selected={(localComps ?? []).includes('supercopa')}
-                  onPress={() => toggleComp('supercopa')}
-                  style={styles.chip}
-                >
-                  Supercopa
-                </Chip>
-              </View>
-              <Text variant="labelSmall" style={styles.compNote}>
-                Las competiciones desactivadas no generan puntos para tu peña.
-              </Text>
-
-              <View style={styles.saveRow}>
-                {rulesSaved && (
-                  <Text variant="labelMedium" style={{ color: theme.colors.primary }}>
-                    ✓ Guardado
-                  </Text>
-                )}
-                <Button
-                  mode="contained"
-                  onPress={() => saveRules()}
-                  loading={savingRules}
-                  disabled={savingRules}
-                  style={{ flex: 1 }}
-                >
-                  Guardar configuración
-                </Button>
-              </View>
-            </>
-          )}
-        </>
+            <View style={styles.saveRow}>
+              {rulesSaved && <Text variant="labelMedium" style={{ color: theme.colors.primary }}>✓ Guardado</Text>}
+              <Button mode="contained" onPress={() => saveRules()} loading={savingRules} disabled={savingRules} style={{ flex: 1 }}>
+                Guardar configuración
+              </Button>
+            </View>
+          </>
+        )
       )}
 
-      {/* ── MULTIPLIERS TAB ── */}
+      {/* ── MULTIPLIERS ── */}
       {tab === 'multipliers' && (
         <>
           <Text variant="titleSmall" style={styles.sectionTitle}>Añadir multiplicador</Text>
-
           <View style={styles.tabRow}>
-            <Chip selected={newScope === 'matchday'} onPress={() => setNewScope('matchday')} style={styles.chip}>
-              Por jornada
-            </Chip>
-            <Chip selected={newScope === 'match'} onPress={() => setNewScope('match')} style={styles.chip}>
-              Por partido
-            </Chip>
+            <Chip selected={newScope === 'matchday'} onPress={() => setNewScope('matchday')} style={{ flex: 1 }}>Por jornada</Chip>
+            <Chip selected={newScope === 'match'} onPress={() => setNewScope('match')} style={{ flex: 1 }}>Por partido</Chip>
           </View>
 
           {newScope === 'matchday' && (
-            <TextInput
-              label="Jornada (1-38)"
-              value={newMatchday}
-              onChangeText={setNewMatchday}
-              keyboardType="numeric"
-              mode="outlined"
-              dense
-            />
+            <TextInput label="Jornada (1-38)" value={newMatchday} onChangeText={setNewMatchday} keyboardType="numeric" mode="outlined" dense />
           )}
-
           {newScope === 'match' && (
-            <>
-              <Text variant="labelSmall" style={{ opacity: 0.6, marginBottom: 4 }}>
-                Selecciona el partido:
-              </Text>
-              {!matches ? (
-                <ActivityIndicator />
-              ) : (
-                <ScrollView style={styles.matchList} nestedScrollEnabled>
-                  {matches.map((m) => (
-                    <List.Item
-                      key={m._id}
-                      title={`${m.homeTeam} vs ${m.awayTeam}`}
-                      description={`J${m.matchday ?? '—'} · ${new Date(m.startTime).toLocaleDateString('es-ES')}`}
-                      onPress={() => setNewMatchId(m._id)}
-                      right={() =>
-                        newMatchId === m._id ? (
-                          <List.Icon icon="check-circle" color={theme.colors.primary} />
-                        ) : null
-                      }
-                      style={newMatchId === m._id ? { backgroundColor: theme.colors.primaryContainer } : undefined}
-                    />
-                  ))}
-                </ScrollView>
-              )}
-            </>
+            <ScrollView style={styles.matchList} nestedScrollEnabled>
+              {(allMatches ?? []).map((m) => (
+                <List.Item
+                  key={m._id}
+                  title={`${m.homeTeam} vs ${m.awayTeam}`}
+                  description={`J${m.matchday ?? '—'} · ${new Date(m.startTime).toLocaleDateString('es-ES')}`}
+                  onPress={() => setNewMatchId(m._id)}
+                  right={() => newMatchId === m._id ? <List.Icon icon="check-circle" color={theme.colors.primary} /> : null}
+                  style={newMatchId === m._id ? { backgroundColor: theme.colors.primaryContainer } : undefined}
+                />
+              ))}
+            </ScrollView>
           )}
 
-          <TextInput
-            label="Multiplicador (ej: 2, 3…)"
-            value={newValue}
-            onChangeText={setNewValue}
-            keyboardType="numeric"
-            mode="outlined"
-            dense
-            style={{ marginTop: 8 }}
-          />
-
-          <Button
-            mode="contained"
-            onPress={() => createMult()}
-            loading={creatingMult}
-            disabled={creatingMult || !canCreateMult}
-            style={{ marginTop: 8 }}
-          >
+          <TextInput label="Multiplicador (×2, ×3…)" value={newValue} onChangeText={setNewValue} keyboardType="numeric" mode="outlined" dense style={{ marginTop: 8 }} />
+          <Button mode="contained" onPress={() => createMult()} loading={creatingMult} disabled={creatingMult || !canCreateMult}>
             Añadir multiplicador
           </Button>
 
           <Divider style={styles.divider} />
           <Text variant="titleSmall" style={styles.sectionTitle}>Multiplicadores activos</Text>
-
           {multipliersLoading && <ActivityIndicator />}
-          {multipliers?.length === 0 && (
-            <Text style={{ opacity: 0.5 }}>Sin multiplicadores configurados.</Text>
-          )}
-          {multipliers?.map((m) => (
-            <List.Item
-              key={m._id}
-              title={
-                m.scope === 'matchday'
-                  ? `×${m.multiplier} — Jornada ${m.matchday}`
-                  : `×${m.multiplier} — Partido específico`
-              }
-              description={`Temporada ${m.season}`}
-              right={() => (
-                <IconButton icon="delete" onPress={() => deleteMult(m._id)} />
-              )}
-            />
-          ))}
+          {multipliers?.length === 0 && <Text style={{ opacity: 0.5 }}>Sin multiplicadores.</Text>}
+          {multipliers?.map((m) => {
+            const match = m.scope === 'match' && m.match ? matchById.get(m.match) : undefined;
+            const title = m.scope === 'matchday'
+              ? `×${m.multiplier} — Jornada ${m.matchday}`
+              : match
+                ? `×${m.multiplier} — ${match.homeTeam} vs ${match.awayTeam} (J${match.matchday ?? '—'})`
+                : `×${m.multiplier} — Partido ID: ${m.match}`;
+            return (
+              <List.Item
+                key={m._id}
+                title={title}
+                description={`Temporada ${m.season}`}
+                right={() => <IconButton icon="delete" onPress={() => deleteMult(m._id)} />}
+              />
+            );
+          })}
+        </>
+      )}
+
+      {/* ── MATCHES (global admin) ── */}
+      {tab === 'matches' && isGlobalAdmin && (
+        <>
+          <Text variant="titleSmall" style={styles.sectionTitle}>Crear partido</Text>
+          <View style={styles.tabRow}>
+            <Chip selected={newCompetition === 'copa_del_rey'} onPress={() => setNewCompetition('copa_del_rey')} style={{ flex: 1 }}>Copa del Rey</Chip>
+            <Chip selected={newCompetition === 'supercopa'} onPress={() => setNewCompetition('supercopa')} style={{ flex: 1 }}>Supercopa</Chip>
+          </View>
+          <TextInput label="Equipo local" value={newHome} onChangeText={setNewHome} mode="outlined" dense />
+          <TextInput label="Equipo visitante" value={newAway} onChangeText={setNewAway} mode="outlined" dense />
+          <View style={styles.dateRow}>
+            <TextInput label="Fecha (YYYY-MM-DD)" value={newDate} onChangeText={setNewDate} mode="outlined" dense style={{ flex: 2 }} placeholder="2027-01-15" />
+            <TextInput label="Hora (HH:MM)" value={newTime} onChangeText={setNewTime} mode="outlined" dense style={{ flex: 1 }} placeholder="20:00" />
+          </View>
+          <Button mode="contained" onPress={() => createMatch()} loading={creatingMatch} disabled={creatingMatch || !canCreateMatch}>
+            Crear partido
+          </Button>
+
+          <Divider style={styles.divider} />
+          <Text variant="titleSmall" style={styles.sectionTitle}>Partidos Copa / Supercopa</Text>
+          {knockoutLoading && <ActivityIndicator />}
+          {knockoutMatches?.length === 0 && <Text style={{ opacity: 0.5 }}>Sin partidos de copa creados todavía.</Text>}
+          {knockoutMatches?.map((m) => <MatchAdminCard key={m._id} match={m} season={season} />)}
         </>
       )}
     </ScrollView>
@@ -355,15 +383,18 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   container: { padding: 16, gap: 12, paddingBottom: 40 },
   tabRow: { flexDirection: 'row', gap: 8 },
-  chip: { flex: 1 },
   sectionTitle: { fontWeight: '600', marginTop: 4 },
   divider: { marginVertical: 8 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   ruleInfo: { flex: 1 },
   ruleControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pointsInput: { width: 64 },
-  compRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   compNote: { opacity: 0.5, marginTop: 4 },
   saveRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 8 },
-  matchList: { maxHeight: 200, borderWidth: 1, borderColor: '#ccc', borderRadius: 8 },
+  matchList: { maxHeight: 220, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ccc', borderRadius: 8 },
+  matchCard: { borderRadius: 10, padding: 14, gap: 6 },
+  resultForm: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' },
+  scoreInput: { width: 80 },
+  qualRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  dateRow: { flexDirection: 'row', gap: 8 },
 });

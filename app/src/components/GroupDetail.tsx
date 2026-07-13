@@ -87,7 +87,7 @@ export function GroupDetail({ groupId, onLeave }: Props) {
           mode="contained"
           icon="soccer"
           style={styles.actionButton}
-          onPress={() => router.push({ pathname: '/predictions/[season]', params: { season: group.season } })}
+          onPress={() => router.push({ pathname: '/predictions/[season]', params: { season: group.season, groupId: group._id } })}
         >
           Predicciones
         </Button>
