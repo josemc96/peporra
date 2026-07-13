@@ -6,6 +6,7 @@ import { Match } from '../models/Match';
 import { Prediction } from '../models/Prediction';
 import { PredictionScore } from '../models/PredictionScore';
 import { User } from '../models/User';
+import { ManualAdjustment } from '../models/ManualAdjustment';
 import { AppError } from '../utils/AppError';
 import { requireGroupAdmin, requireGroupMember } from '../services/groupAuth.service';
 import { applyMatchdayPenalties } from '../jobs/applyMatchdayPenalties.job';
@@ -138,6 +139,12 @@ export async function getGroupDebt(req: Request, res: Response): Promise<void> {
   for (const p of penalties) {
     const key = p.user.toString();
     debtMap.set(key, (debtMap.get(key) ?? 0) + p.amount);
+  }
+
+  const manualAdj = await ManualAdjustment.find({ group: groupId, season, moneyAmount: { $ne: 0 } });
+  for (const adj of manualAdj) {
+    const key = adj.user.toString();
+    if (debtMap.has(key)) debtMap.set(key, (debtMap.get(key) ?? 0) + adj.moneyAmount);
   }
 
   const users = await User.find({ _id: { $in: memberIds } }).select('alias email');
