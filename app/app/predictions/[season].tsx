@@ -74,7 +74,19 @@ function MatchCard({
           <Text variant="titleSmall" style={styles.team} numberOfLines={1}>
             {match.homeTeam}
           </Text>
-          <Text variant="labelMedium" style={styles.vs}>vs</Text>
+          {match.status === 'finished' ? (
+            <Text variant="titleMedium" style={styles.scoreCenter}>
+              {match.homeScore} - {match.awayScore}
+            </Text>
+          ) : isLocked ? (
+            <Text variant="labelSmall" style={styles.liveIndicator}>● EN CURSO</Text>
+          ) : hasPrediction ? (
+            <Text variant="titleMedium" style={styles.predCenter}>
+              {prediction.predictedHome} - {prediction.predictedAway}
+            </Text>
+          ) : (
+            <Text variant="labelMedium" style={styles.vs}>vs</Text>
+          )}
           <Text variant="titleSmall" style={[styles.team, styles.teamRight]} numberOfLines={1}>
             {match.awayTeam}
           </Text>
@@ -89,27 +101,17 @@ function MatchCard({
           {formatDateTime(match.startTime)}
         </Text>
 
-        {match.status === 'finished' && (
-          <Text variant="labelMedium" style={styles.result}>
-            Resultado: {match.homeScore} - {match.awayScore}
-          </Text>
-        )}
-
         <View style={styles.predictionRow}>
-          {hasPrediction ? (
+          {!isLocked ? (
+            <Button mode="text" compact onPress={openEditor} style={styles.predBtn}>
+              {hasPrediction ? 'Editar' : 'Predecir'}
+            </Button>
+          ) : hasPrediction ? (
             <Text variant="bodySmall" style={styles.predictionText}>
               Tu predicción: {prediction.predictedHome} - {prediction.predictedAway}
             </Text>
           ) : (
-            <Text variant="bodySmall" style={styles.noPrediction}>
-              {isLocked ? 'No predijiste' : 'Sin predecir'}
-            </Text>
-          )}
-
-          {!isLocked && (
-            <Button mode="text" compact onPress={openEditor}>
-              {hasPrediction ? 'Editar' : 'Predecir'}
-            </Button>
+            <Text variant="bodySmall" style={styles.noPrediction}>No predijiste</Text>
           )}
         </View>
       </Card.Content>
@@ -272,6 +274,26 @@ const styles = StyleSheet.create({
   },
   vs: {
     opacity: 0.5,
+  },
+  scoreCenter: {
+    fontWeight: '700',
+    minWidth: 48,
+    textAlign: 'center',
+  },
+  predCenter: {
+    fontWeight: '600',
+    minWidth: 48,
+    textAlign: 'center',
+    opacity: 0.75,
+  },
+  liveIndicator: {
+    color: '#DC2626',
+    fontWeight: '700',
+    minWidth: 64,
+    textAlign: 'center',
+  },
+  predBtn: {
+    marginLeft: -8,
   },
   multChip: {
     backgroundColor: '#F59E0B',
