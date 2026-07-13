@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 import { PaperProvider, MD3DarkTheme, MD3LightTheme, ActivityIndicator } from 'react-native-paper';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
@@ -60,11 +61,12 @@ function RootLayoutNav() {
   const theme = colorScheme === 'dark' ? MD3DarkTheme : MD3LightTheme;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <PaperProvider theme={theme}>
-          <AuthGuard>
-            <Stack>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <PaperProvider theme={theme}>
+            <AuthGuard>
+              <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="login" options={{ headerShown: false }} />
               <Stack.Screen name="register" options={{ headerShown: false }} />
@@ -74,10 +76,12 @@ function RootLayoutNav() {
               <Stack.Screen name="predictions/[season]" options={{ title: 'Predicciones' }} />
               <Stack.Screen name="predictions/edit/[matchId]" options={{ presentation: 'modal', title: 'Tu predicción' }} />
               <Stack.Screen name="ranking/[groupId]" options={{ title: 'Ranking' }} />
+              <Stack.Screen name="standings-prediction/[season]" options={{ title: 'Clasificación' }} />
             </Stack>
-          </AuthGuard>
-        </PaperProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+            </AuthGuard>
+          </PaperProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
