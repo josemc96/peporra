@@ -15,6 +15,7 @@ import awardResultRoutes from './routes/awardResult.routes';
 import rankingRoutes from './routes/ranking.routes';
 import penaltyRoutes from './routes/penaltyConfig.routes';
 import manualAdjustmentRoutes from './routes/manualAdjustment.routes';
+import cardRoutes from './routes/card.routes';
 import { getMatchPredictionVisibility } from './controllers/matchPredictionVisibility.controller';
 import { requireAuth } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/errorHandler';
@@ -43,6 +44,7 @@ app.use('/api/award-results', awardResultRoutes);
 app.use('/api/groups/:groupId/ranking', rankingRoutes);
 app.use('/api/groups/:groupId/penalties', penaltyRoutes);
 app.use('/api/groups/:groupId/adjustments', manualAdjustmentRoutes);
+app.use('/api/groups/:groupId/cards', cardRoutes);
 app.get('/api/groups/:groupId/matches/:matchId/predictions', requireAuth, getMatchPredictionVisibility);
 
 app.use(errorHandler);
