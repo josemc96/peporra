@@ -9,6 +9,7 @@ import { StandingsPredictionScore } from '../models/StandingsPredictionScore';
 import { AwardPrediction } from '../models/AwardPrediction';
 import { AwardPredictionScore } from '../models/AwardPredictionScore';
 import { User } from '../models/User';
+import { ManualAdjustment } from '../models/ManualAdjustment';
 import { AppError } from '../utils/AppError';
 import { requireGroupMember } from '../services/groupAuth.service';
 
@@ -96,6 +97,12 @@ export async function getGroupRanking(req: Request, res: Response): Promise<void
   for (const score of awardScores) {
     const userId = awardUserById.get(score.awardPrediction.toString());
     if (userId) addPoints(userId, score.points);
+  }
+
+  const manualAdjustments = await ManualAdjustment.find({ group: groupId, season });
+  for (const adj of manualAdjustments) {
+    const key = adj.user.toString();
+    if (totals.has(key)) totals.set(key, (totals.get(key) ?? 0) + adj.points);
   }
 
   const users = await User.find({ _id: { $in: memberIds } }).select('alias email');

@@ -20,6 +20,9 @@ import { adminGroupApi, RuleEntry, GroupFeature } from '@/api/adminGroup';
 import { adminMatchesApi } from '@/api/adminMatches';
 import { predictionsApi, Match } from '@/api/predictions';
 import { penaltiesApi, PenaltyEntry } from '@/api/penalties';
+import { manualAdjustmentsApi, ManualAdjustment } from '@/api/manualAdjustments';
+import { groupsApi, GroupMember } from '@/api/groups';
+import { rankingApi } from '@/api/ranking';
 import { useAuth } from '@/context/AuthContext';
 
 // ─── Rule row ──────────────────────────────────────────────────────────────
@@ -140,7 +143,7 @@ export default function AdminPanelScreen() {
   const theme = useTheme();
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState<'rules' | 'multipliers' | 'matches' | 'penalties'>('rules');
+  const [tab, setTab] = useState<'rules' | 'multipliers' | 'matches' | 'penalties' | 'adjustments'>('rules');
 
   // ── Rules ──────────────────────────────────────────────────────────────────
   const [localRules, setLocalRules] = useState<RuleEntry[] | null>(null);
@@ -285,11 +288,64 @@ export default function AdminPanelScreen() {
     setPenaltiesSaved(false);
   }
 
+  // ── Adjustments ────────────────────────────────────────────────────────────
+  const [adjUserId, setAdjUserId] = useState('');
+  const [adjPoints, setAdjPoints] = useState('');
+  const [adjMoney, setAdjMoney] = useState('');
+  const [adjReason, setAdjReason] = useState('');
+
+  const { data: groupDetail } = useQuery({
+    queryKey: ['group-detail', groupId],
+    queryFn: () => groupsApi.get(groupId),
+    enabled: tab === 'adjustments',
+  });
+
+  const { data: currentRanking } = useQuery({
+    queryKey: ['ranking', groupId, season],
+    queryFn: () => rankingApi.get(groupId, season),
+    enabled: tab === 'adjustments',
+  });
+  const pointsByUser = new Map(currentRanking?.map((r) => [r.user.id, r.points]) ?? []);
+
+  const { data: adjustments, isLoading: adjLoading } = useQuery({
+    queryKey: ['adjustments', groupId, season],
+    queryFn: () => manualAdjustmentsApi.list(groupId, season).then((r) => r.adjustments),
+    enabled: tab === 'adjustments',
+  });
+
+  const { mutate: createAdj, isPending: creatingAdj } = useMutation({
+    mutationFn: () => manualAdjustmentsApi.create(groupId, {
+      season,
+      userId: adjUserId,
+      points: adjPoints !== '' ? parseInt(adjPoints, 10) : undefined,
+      moneyAmount: adjMoney !== '' ? parseFloat(adjMoney) : undefined,
+      reason: adjReason.trim() || undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['adjustments', groupId, season] });
+      qc.invalidateQueries({ queryKey: ['ranking', groupId, season] });
+      setAdjUserId(''); setAdjPoints(''); setAdjMoney(''); setAdjReason('');
+    },
+  });
+
+  const { mutate: deleteAdj } = useMutation({
+    mutationFn: (id: string) => manualAdjustmentsApi.delete(groupId, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['adjustments', groupId, season] });
+      qc.invalidateQueries({ queryKey: ['ranking', groupId, season] });
+    },
+  });
+
+  const adjPtsNum = adjPoints !== '' ? parseInt(adjPoints, 10) : 0;
+  const adjMoneyNum = adjMoney !== '' ? parseFloat(adjMoney) : 0;
+  const canCreateAdj = adjUserId.length > 0 && (adjPtsNum !== 0 || adjMoneyNum !== 0) && !isNaN(adjPtsNum) && !isNaN(adjMoneyNum);
+
   // ── Tabs ───────────────────────────────────────────────────────────────────
-  const tabs: Array<{ key: 'rules' | 'multipliers' | 'matches' | 'penalties'; label: string }> = [
+  const tabs: Array<{ key: 'rules' | 'multipliers' | 'matches' | 'penalties' | 'adjustments'; label: string }> = [
     { key: 'rules', label: 'Reglas' },
     { key: 'multipliers', label: 'Multiplicadores' },
     { key: 'penalties', label: 'Bote' },
+    { key: 'adjustments', label: 'Ajustes' },
     ...(isGlobalAdmin ? [{ key: 'matches' as const, label: 'Partidos' }] : []),
   ];
 
@@ -443,6 +499,85 @@ export default function AdminPanelScreen() {
         </>
       )}
 
+      {/* ── ADJUSTMENTS ── */}
+      {tab === 'adjustments' && (
+        <>
+          <Text variant="titleSmall" style={styles.sectionTitle}>Selecciona jugador</Text>
+          {(groupDetail?.members ?? []).map((m: GroupMember) => {
+            const pts = pointsByUser.get(m._id);
+            return (
+              <List.Item
+                key={m._id}
+                title={m.alias}
+                description={pts != null ? `${pts} pts actuales` : m.email}
+                onPress={() => setAdjUserId(m._id)}
+                right={() => adjUserId === m._id ? <List.Icon icon="check-circle" color={theme.colors.primary} /> : null}
+                style={adjUserId === m._id ? { backgroundColor: theme.colors.primaryContainer, borderRadius: 8 } : undefined}
+              />
+            );
+          })}
+
+          <View style={styles.adjRow}>
+            <TextInput
+              label="Puntos (±)"
+              value={adjPoints}
+              onChangeText={setAdjPoints}
+              keyboardType="numbers-and-punctuation"
+              mode="outlined"
+              dense
+              style={{ flex: 1 }}
+              placeholder="-3 o 5"
+            />
+            <TextInput
+              label="Euros (±)"
+              value={adjMoney}
+              onChangeText={setAdjMoney}
+              keyboardType="numbers-and-punctuation"
+              mode="outlined"
+              dense
+              style={{ flex: 1 }}
+              placeholder="-2 o 1.5"
+            />
+          </View>
+          <TextInput
+            label="Motivo (opcional)"
+            value={adjReason}
+            onChangeText={setAdjReason}
+            mode="outlined"
+            dense
+            placeholder="Error en jornada 12"
+          />
+          <Button
+            mode="contained"
+            onPress={() => createAdj()}
+            loading={creatingAdj}
+            disabled={creatingAdj || !canCreateAdj}
+          >
+            Aplicar ajuste
+          </Button>
+
+          <Divider style={styles.divider} />
+          <Text variant="titleSmall" style={styles.sectionTitle}>Ajustes aplicados</Text>
+          {adjLoading && <ActivityIndicator />}
+          {adjustments?.length === 0 && <Text style={{ opacity: 0.5 }}>Sin ajustes esta temporada.</Text>}
+          {adjustments?.map((adj: ManualAdjustment) => {
+            const parts: string[] = [];
+            if (adj.points !== 0) parts.push(`${adj.points > 0 ? '+' : ''}${adj.points} pts`);
+            if (adj.moneyAmount !== 0) parts.push(`${adj.moneyAmount > 0 ? '+' : ''}${adj.moneyAmount}€`);
+            const isPositive = adj.points > 0 || adj.moneyAmount > 0;
+            return (
+              <List.Item
+                key={adj._id}
+                title={`${adj.user.alias} · ${parts.join(' / ')}`}
+                description={adj.reason ?? new Date(adj.createdAt).toLocaleDateString('es-ES')}
+                titleStyle={{ color: isPositive ? '#15803D' : '#B91C1C' }}
+                right={() => <IconButton icon="delete" onPress={() => deleteAdj(adj._id)} />}
+              />
+            );
+          })}
+        </>
+      )}
+
       {/* ── MATCHES (global admin) ── */}
       {tab === 'matches' && isGlobalAdmin && (
         <>
@@ -491,4 +626,5 @@ const styles = StyleSheet.create({
   qualRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   penaltyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   dateRow: { flexDirection: 'row', gap: 8 },
+  adjRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
 });
