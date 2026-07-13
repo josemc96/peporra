@@ -80,6 +80,7 @@ function RootLayoutNav() {
               <Stack.Screen name="award-prediction/[season]" options={{ title: 'Premios' }} />
               <Stack.Screen name="knockout/[season]" options={{ title: 'Copa / Supercopa' }} />
               <Stack.Screen name="admin/[groupId]" options={{ title: 'Panel de admin' }} />
+              <Stack.Screen name="admin/global" options={{ title: 'Admin global' }} />
             </Stack>
             </AuthGuard>
           </PaperProvider>

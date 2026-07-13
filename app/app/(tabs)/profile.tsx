@@ -3,9 +3,11 @@ import { Avatar, Button, Divider, Text } from 'react-native-paper';
 import { router } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from 'react-native-paper';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const theme = useTheme();
 
   async function handleLogout() {
     await logout();
@@ -21,11 +23,25 @@ export default function ProfileScreen() {
         <Text variant="headlineSmall" style={styles.alias}>{user.alias}</Text>
         <Text variant="bodyMedium" style={styles.email}>{user.email}</Text>
         {user.role === 'admin' && (
-          <Text variant="labelSmall" style={styles.adminBadge}>Admin</Text>
+          <Text variant="labelSmall" style={[styles.adminBadge, { backgroundColor: theme.colors.primaryContainer, color: theme.colors.primary }]}>
+            Admin global
+          </Text>
         )}
       </View>
 
       <Divider style={styles.divider} />
+
+      {user.role === 'admin' && (
+        <Button
+          mode="contained-tonal"
+          icon="shield-crown"
+          style={styles.adminButton}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push('/admin/global' as any)}
+        >
+          Panel de admin global
+        </Button>
+      )}
 
       <Button
         mode="outlined"
@@ -65,6 +81,9 @@ const styles = StyleSheet.create({
   },
   divider: {
     marginVertical: 16,
+  },
+  adminButton: {
+    marginBottom: 8,
   },
   logoutButton: {
     marginTop: 8,
