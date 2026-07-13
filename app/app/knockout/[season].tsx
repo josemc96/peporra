@@ -48,6 +48,12 @@ function MatchCard({ match, prediction, qualifierPrediction, season, locked }: M
     ? `${prediction.predictedHome} - ${prediction.predictedAway}`
     : 'Sin predicción';
 
+  // Chips de clasificado solo cuando predices empate (o aún no has predicho)
+  const predictedIsDraw =
+    prediction !== undefined &&
+    prediction.predictedHome === prediction.predictedAway;
+  const needsQualifier = !prediction || predictedIsDraw;
+
   return (
     <Surface style={styles.card} elevation={2}>
       <Text variant="labelSmall" style={styles.competition}>
@@ -88,33 +94,33 @@ function MatchCard({ match, prediction, qualifierPrediction, season, locked }: M
         </Button>
       )}
 
-      <Divider style={styles.divider} />
-
-      {/* Qualifier prediction */}
-      <Text variant="labelMedium" style={styles.qualifierLabel}>
-        ¿Quién se clasifica?
-      </Text>
-      <Text variant="labelSmall" style={styles.qualifierNote}>
-        Solo puntúa si el partido acaba en empate a los 90'
-      </Text>
-      <View style={styles.qualifierRow}>
-        <Chip
-          selected={qualifierPrediction === 'home'}
-          onPress={locked ? undefined : () => saveQualifier('home')}
-          disabled={isPending}
-          style={styles.qualifierChip}
-        >
-          {match.homeTeam}
-        </Chip>
-        <Chip
-          selected={qualifierPrediction === 'away'}
-          onPress={locked ? undefined : () => saveQualifier('away')}
-          disabled={isPending}
-          style={styles.qualifierChip}
-        >
-          {match.awayTeam}
-        </Chip>
-      </View>
+      {/* Qualifier chips: solo si predices empate o no has predicho aún */}
+      {needsQualifier && (
+        <>
+          <Divider style={styles.divider} />
+          <Text variant="labelMedium" style={styles.qualifierLabel}>
+            ¿Quién se clasifica? <Text variant="labelSmall" style={styles.qualifierNote}>(empate → penaltis)</Text>
+          </Text>
+          <View style={styles.qualifierRow}>
+            <Chip
+              selected={qualifierPrediction === 'home'}
+              onPress={locked ? undefined : () => saveQualifier('home')}
+              disabled={isPending}
+              style={styles.qualifierChip}
+            >
+              {match.homeTeam}
+            </Chip>
+            <Chip
+              selected={qualifierPrediction === 'away'}
+              onPress={locked ? undefined : () => saveQualifier('away')}
+              disabled={isPending}
+              style={styles.qualifierChip}
+            >
+              {match.awayTeam}
+            </Chip>
+          </View>
+        </>
+      )}
     </Surface>
   );
 }

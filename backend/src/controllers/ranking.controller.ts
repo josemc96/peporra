@@ -3,7 +3,6 @@ import { Types } from 'mongoose';
 import { Match } from '../models/Match';
 import { Prediction } from '../models/Prediction';
 import { PredictionScore } from '../models/PredictionScore';
-import { QualifierPrediction } from '../models/QualifierPrediction';
 import { QualifierPredictionScore } from '../models/QualifierPredictionScore';
 import { StandingsPrediction } from '../models/StandingsPrediction';
 import { StandingsPredictionScore } from '../models/StandingsPredictionScore';
@@ -68,14 +67,12 @@ export async function getGroupRanking(req: Request, res: Response): Promise<void
     }
   }
 
-  const qualifierPredictions = await QualifierPrediction.find({ match: { $in: seasonMatchIds } }).select('_id user');
-  const qualifierUserById = new Map(qualifierPredictions.map((p) => [p._id.toString(), p.user]));
   const qualifierScores = await QualifierPredictionScore.find({
     group: groupId,
-    qualifierPrediction: { $in: qualifierPredictions.map((p) => p._id) },
+    prediction: { $in: predictions.map((p) => p._id) },
   });
   for (const score of qualifierScores) {
-    const userId = qualifierUserById.get(score.qualifierPrediction.toString());
+    const userId = predictionUserById.get(score.prediction.toString());
     if (userId) addPoints(userId, score.points);
   }
 
