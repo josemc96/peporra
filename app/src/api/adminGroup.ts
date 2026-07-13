@@ -6,12 +6,15 @@ export interface RuleEntry {
   active: boolean;
 }
 
+export type GroupFeature = 'standings' | 'pichichi' | 'zamora';
+
 export interface GroupRuleSettings {
   _id: string;
   group: string;
   season: string;
   rules: RuleEntry[];
   enabledCompetitions: ('copa_del_rey' | 'supercopa')[];
+  enabledFeatures: GroupFeature[];
 }
 
 export interface ScoreMultiplier {
@@ -34,11 +37,12 @@ export const adminGroupApi = {
     groupId: string,
     season: string,
     rules?: { key: string; points?: number; active?: boolean }[],
-    enabledCompetitions?: ('copa_del_rey' | 'supercopa')[]
+    enabledCompetitions?: ('copa_del_rey' | 'supercopa')[],
+    enabledFeatures?: GroupFeature[]
   ) =>
     apiFetch<{ settings: GroupRuleSettings }>(`/groups/${groupId}/rule-settings`, {
       method: 'PUT',
-      body: JSON.stringify({ season, rules, enabledCompetitions }),
+      body: JSON.stringify({ season, rules, enabledCompetitions, enabledFeatures }),
     }).then((r) => r.settings),
 
   listMultipliers: (groupId: string, season: string) =>

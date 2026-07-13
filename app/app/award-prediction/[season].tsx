@@ -15,13 +15,25 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { awardPredictionsApi, Award } from '@/api/awardPredictions';
+import { adminGroupApi } from '@/api/adminGroup';
 
 export default function AwardPredictionScreen() {
-  const { season } = useLocalSearchParams<{ season: string }>();
+  const { season, groupId } = useLocalSearchParams<{ season: string; groupId?: string }>();
   const theme = useTheme();
   const qc = useQueryClient();
 
-  const [award, setAward] = useState<Award>('pichichi');
+  const { data: settings } = useQuery({
+    queryKey: ['rule-settings', groupId, season],
+    queryFn: () => adminGroupApi.getRuleSettings(groupId!, season),
+    enabled: !!groupId,
+    staleTime: 5 * 60 * 1000,
+  });
+  const feats = settings?.enabledFeatures ?? [];
+  const showPichichi = !groupId || feats.includes('pichichi');
+  const showZamora = !groupId || feats.includes('zamora');
+
+  const defaultAward: Award = showPichichi ? 'pichichi' : 'zamora';
+  const [award, setAward] = useState<Award>(defaultAward);
   const [playerInput, setPlayerInput] = useState('');
   const [saved, setSaved] = useState(false);
 
@@ -56,14 +68,16 @@ export default function AwardPredictionScreen() {
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
       {/* Award selector */}
-      <View style={styles.tabRow}>
-        <Chip selected={award === 'pichichi'} onPress={() => setAward('pichichi')} style={styles.chip}>
-          🏆 Pichichi
-        </Chip>
-        <Chip selected={award === 'zamora'} onPress={() => setAward('zamora')} style={styles.chip}>
-          🧤 Zamora
-        </Chip>
-      </View>
+      {showPichichi && showZamora && (
+        <View style={styles.tabRow}>
+          <Chip selected={award === 'pichichi'} onPress={() => setAward('pichichi')} style={styles.chip}>
+            🏆 Pichichi
+          </Chip>
+          <Chip selected={award === 'zamora'} onPress={() => setAward('zamora')} style={styles.chip}>
+            🧤 Zamora
+          </Chip>
+        </View>
+      )}
 
       <Text variant="titleMedium" style={styles.sectionTitle}>
         {award === 'pichichi' ? 'Máximo goleador' : 'Portero menos goleado'}

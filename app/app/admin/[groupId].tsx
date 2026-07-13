@@ -16,7 +16,7 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { adminGroupApi, RuleEntry } from '@/api/adminGroup';
+import { adminGroupApi, RuleEntry, GroupFeature } from '@/api/adminGroup';
 import { adminMatchesApi } from '@/api/adminMatches';
 import { predictionsApi, Match } from '@/api/predictions';
 import { useAuth } from '@/context/AuthContext';
@@ -144,6 +144,7 @@ export default function AdminPanelScreen() {
   // ── Rules ──────────────────────────────────────────────────────────────────
   const [localRules, setLocalRules] = useState<RuleEntry[] | null>(null);
   const [localComps, setLocalComps] = useState<('copa_del_rey' | 'supercopa')[] | null>(null);
+  const [localFeatures, setLocalFeatures] = useState<GroupFeature[] | null>(null);
   const [rulesSaved, setRulesSaved] = useState(false);
 
   const { isLoading: settingsLoading, data: settingsData } = useQuery({
@@ -153,13 +154,15 @@ export default function AdminPanelScreen() {
   if (settingsData && !localRules) {
     setLocalRules(settingsData.rules.map((r) => ({ ...r })));
     setLocalComps(settingsData.enabledCompetitions ?? []);
+    setLocalFeatures(settingsData.enabledFeatures ?? []);
   }
 
   const { mutate: saveRules, isPending: savingRules } = useMutation({
     mutationFn: () => adminGroupApi.updateRuleSettings(
       groupId, season,
       (localRules ?? []).map((r) => ({ key: r.rule.key, points: r.points, active: r.active })),
-      localComps ?? []
+      localComps ?? [],
+      localFeatures ?? []
     ),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['rule-settings', groupId, season] }); setRulesSaved(true); },
   });
@@ -171,6 +174,11 @@ export default function AdminPanelScreen() {
 
   function toggleComp(comp: 'copa_del_rey' | 'supercopa') {
     setLocalComps((prev) => { const c = prev ?? []; return c.includes(comp) ? c.filter((x) => x !== comp) : [...c, comp]; });
+    setRulesSaved(false);
+  }
+
+  function toggleFeature(feat: GroupFeature) {
+    setLocalFeatures((prev) => { const f = prev ?? []; return f.includes(feat) ? f.filter((x) => x !== feat) : [...f, feat]; });
     setRulesSaved(false);
   }
 
@@ -278,7 +286,15 @@ export default function AdminPanelScreen() {
               );
             })}
 
-            <Text variant="titleSmall" style={styles.sectionTitle}>Competiciones activas</Text>
+            <Text variant="titleSmall" style={styles.sectionTitle}>Funcionalidades activas</Text>
+            <View style={styles.tabRow}>
+              <Chip selected={(localFeatures ?? []).includes('standings')} onPress={() => toggleFeature('standings')} style={{ flex: 1 }}>Clasificación</Chip>
+              <Chip selected={(localFeatures ?? []).includes('pichichi')} onPress={() => toggleFeature('pichichi')} style={{ flex: 1 }}>Pichichi</Chip>
+              <Chip selected={(localFeatures ?? []).includes('zamora')} onPress={() => toggleFeature('zamora')} style={{ flex: 1 }}>Zamora</Chip>
+            </View>
+            <Text variant="labelSmall" style={styles.compNote}>Activa las secciones que quieras en tu peña.</Text>
+
+            <Text variant="titleSmall" style={[styles.sectionTitle, { marginTop: 8 }]}>Competiciones activas</Text>
             <View style={styles.tabRow}>
               <Chip selected={(localComps ?? []).includes('copa_del_rey')} onPress={() => toggleComp('copa_del_rey')} style={{ flex: 1 }}>Copa del Rey</Chip>
               <Chip selected={(localComps ?? []).includes('supercopa')} onPress={() => toggleComp('supercopa')} style={{ flex: 1 }}>Supercopa</Chip>

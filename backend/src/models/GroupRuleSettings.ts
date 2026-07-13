@@ -7,11 +7,14 @@ export interface IGroupRuleConfig {
   active: boolean;
 }
 
+export type GroupFeature = 'standings' | 'pichichi' | 'zamora';
+
 export interface IGroupRuleSettings extends Document {
   group: Types.ObjectId;
   season: string;
   rules: IGroupRuleConfig[];
   enabledCompetitions: Competition[];
+  enabledFeatures: GroupFeature[];
 }
 
 const groupRuleConfigSchema = new Schema<IGroupRuleConfig>(
@@ -28,6 +31,7 @@ const groupRuleSettingsSchema = new Schema<IGroupRuleSettings>({
   season: { type: String, required: true },
   rules: [groupRuleConfigSchema],
   enabledCompetitions: [{ type: String, enum: ['copa_del_rey', 'supercopa'] }],
+  enabledFeatures: [{ type: String, enum: ['standings', 'pichichi', 'zamora'] }],
 });
 
 groupRuleSettingsSchema.index({ group: 1, season: 1 }, { unique: true });

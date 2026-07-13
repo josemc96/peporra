@@ -23,10 +23,11 @@ export async function getGroupRuleSettings(req: Request, res: Response): Promise
 
 export async function updateGroupRuleSettings(req: Request, res: Response): Promise<void> {
   const groupId = req.params.groupId as string;
-  const { season, rules, enabledCompetitions } = req.body as {
+  const { season, rules, enabledCompetitions, enabledFeatures } = req.body as {
     season?: string;
     rules?: { key?: string; points?: number; active?: boolean }[];
     enabledCompetitions?: string[];
+    enabledFeatures?: string[];
   };
 
   if (!season) {
@@ -75,6 +76,15 @@ export async function updateGroupRuleSettings(req: Request, res: Response): Prom
       throw new AppError('enabledCompetitions solo admite "copa_del_rey"/"supercopa"', 400);
     }
     settings.enabledCompetitions = enabledCompetitions as typeof settings.enabledCompetitions;
+  }
+
+  if (enabledFeatures) {
+    const validFeatures = ['standings', 'pichichi', 'zamora'];
+    const valid = enabledFeatures.every((f) => validFeatures.includes(f));
+    if (!valid) {
+      throw new AppError('enabledFeatures solo admite "standings"/"pichichi"/"zamora"', 400);
+    }
+    settings.enabledFeatures = enabledFeatures as typeof settings.enabledFeatures;
   }
 
   await settings.save();

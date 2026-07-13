@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 
 import { groupsApi, GroupMember } from '@/api/groups';
+import { adminGroupApi } from '@/api/adminGroup';
 import { useAuth } from '@/context/AuthContext';
 
 function MemberRow({ member, isAdmin }: { member: GroupMember; isAdmin: boolean }) {
@@ -39,6 +40,12 @@ export function GroupDetail({ groupId, onLeave }: Props) {
     queryFn: () => groupsApi.get(groupId),
   });
 
+  const { data: settings } = useQuery({
+    queryKey: ['rule-settings', groupId, group?.season],
+    queryFn: () => adminGroupApi.getRuleSettings(groupId, group!.season),
+    enabled: !!group,
+  });
+
   async function copyCode() {
     if (!group) return;
     await Clipboard.setStringAsync(group.inviteCode);
@@ -64,6 +71,12 @@ export function GroupDetail({ groupId, onLeave }: Props) {
   }
 
   const isGroupAdmin = user?.id === group.admin._id;
+  const feats = settings?.enabledFeatures ?? [];
+  const comps = settings?.enabledCompetitions ?? [];
+  const hasStandings = feats.includes('standings');
+  const hasPichichi = feats.includes('pichichi');
+  const hasZamora = feats.includes('zamora');
+  const hasKnockout = comps.includes('copa_del_rey') || comps.includes('supercopa');
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
@@ -100,35 +113,43 @@ export function GroupDetail({ groupId, onLeave }: Props) {
           Ranking
         </Button>
       </View>
-      <Button
-        mode="outlined"
-        icon="trophy-outline"
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onPress={() => router.push({ pathname: '/knockout/[season]' as any, params: { season: group.season } })}
-      >
-        Copa / Supercopa
-      </Button>
+      {hasKnockout && (
+        <Button
+          mode="outlined"
+          icon="trophy-outline"
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push({ pathname: '/knockout/[season]' as any, params: { season: group.season } })}
+        >
+          Copa / Supercopa
+        </Button>
+      )}
 
-      <View style={styles.secondaryButtons}>
-        <Button
-          mode="outlined"
-          icon="table"
-          style={styles.halfButton}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          onPress={() => router.push({ pathname: '/standings-prediction/[season]' as any, params: { season: group.season } })}
-        >
-          Clasificación
-        </Button>
-        <Button
-          mode="outlined"
-          icon="medal"
-          style={styles.halfButton}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          onPress={() => router.push({ pathname: '/award-prediction/[season]' as any, params: { season: group.season } })}
-        >
-          Premios
-        </Button>
-      </View>
+      {(hasStandings || hasPichichi || hasZamora) && (
+        <View style={styles.secondaryButtons}>
+          {hasStandings && (
+            <Button
+              mode="outlined"
+              icon="table"
+              style={styles.halfButton}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              onPress={() => router.push({ pathname: '/standings-prediction/[season]' as any, params: { season: group.season } })}
+            >
+              Clasificación
+            </Button>
+          )}
+          {(hasPichichi || hasZamora) && (
+            <Button
+              mode="outlined"
+              icon="medal"
+              style={styles.halfButton}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              onPress={() => router.push({ pathname: '/award-prediction/[season]' as any, params: { season: group.season, groupId: group._id } })}
+            >
+              Premios
+            </Button>
+          )}
+        </View>
+      )}
 
       <Divider style={styles.divider} />
 
