@@ -100,6 +100,15 @@ export function GroupDetail({ groupId, onLeave }: Props) {
           Ranking
         </Button>
       </View>
+      <Button
+        mode="outlined"
+        icon="trophy-outline"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onPress={() => router.push({ pathname: '/knockout/[season]' as any, params: { season: group.season } })}
+      >
+        Copa / Supercopa
+      </Button>
+
       <View style={styles.secondaryButtons}>
         <Button
           mode="outlined"
