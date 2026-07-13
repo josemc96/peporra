@@ -143,9 +143,14 @@ export function GroupDetail({ groupId, onLeave }: Props) {
       {isGroupAdmin && (
         <>
           <Divider style={styles.divider} />
-          <Text variant="labelMedium" style={styles.adminNote}>
-            Eres el admin de esta peña. La configuración de reglas llega en una fase posterior.
-          </Text>
+          <Button
+            mode="contained-tonal"
+            icon="cog"
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onPress={() => router.push({ pathname: '/admin/[groupId]' as any, params: { groupId: group._id, season: group.season } })}
+          >
+            Panel de admin
+          </Button>
         </>
       )}
 
