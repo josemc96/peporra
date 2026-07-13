@@ -100,6 +100,14 @@ export function GroupDetail({ groupId, onLeave }: Props) {
           Ranking
         </Button>
       </View>
+      <Button
+        mode="outlined"
+        icon="table"
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onPress={() => router.push({ pathname: '/standings-prediction/[season]' as any, params: { season: group.season } })}
+      >
+        Clasificación
+      </Button>
 
       <Divider style={styles.divider} />
 
