@@ -72,6 +72,43 @@ export async function listMyGroups(req: Request, res: Response): Promise<void> {
   res.json({ groups });
 }
 
+export async function leaveGroup(req: Request, res: Response): Promise<void> {
+  const group = await Group.findById(req.params.id);
+  if (!group) throw new AppError('Peña no encontrada', 404);
+
+  const userId = req.user!.id;
+  if (!group.members.some((m) => m.toString() === userId)) {
+    throw new AppError('No perteneces a esta peña', 403);
+  }
+  if (group.admin.toString() === userId) {
+    throw new AppError('El admin no puede abandonar la peña', 400);
+  }
+
+  await Group.findByIdAndUpdate(group._id, { $pull: { members: userId } });
+  res.json({ message: 'Has abandonado la peña' });
+}
+
+export async function kickMember(req: Request, res: Response): Promise<void> {
+  const group = await Group.findById(req.params.id);
+  if (!group) throw new AppError('Peña no encontrada', 404);
+
+  const requesterId = req.user!.id;
+  if (group.admin.toString() !== requesterId) {
+    throw new AppError('Solo el admin puede expulsar miembros', 403);
+  }
+
+  const targetId = req.params.userId;
+  if (targetId === requesterId) {
+    throw new AppError('El admin no puede expulsarse a sí mismo', 400);
+  }
+  if (!group.members.some((m) => m.toString() === targetId)) {
+    throw new AppError('Ese usuario no es miembro de la peña', 404);
+  }
+
+  await Group.findByIdAndUpdate(group._id, { $pull: { members: targetId } });
+  res.json({ message: 'Miembro expulsado' });
+}
+
 export async function getGroup(req: Request, res: Response): Promise<void> {
   const group = await Group.findById(req.params.id).populate<{ admin: IUser; members: IUser[] }>(
     'admin members',

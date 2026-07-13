@@ -41,4 +41,8 @@ export const groupsApi = {
       method: 'POST',
       body: JSON.stringify({ inviteCode }),
     }).then((r) => r.group),
+  leave: (groupId: string) =>
+    apiFetch<{ message: string }>(`/groups/${groupId}/members/me`, { method: 'DELETE' }),
+  kick: (groupId: string, userId: string) =>
+    apiFetch<{ message: string }>(`/groups/${groupId}/members/${userId}`, { method: 'DELETE' }),
 };
