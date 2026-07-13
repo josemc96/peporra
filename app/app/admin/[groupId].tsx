@@ -23,6 +23,7 @@ import { penaltiesApi, PenaltyEntry } from '@/api/penalties';
 import { manualAdjustmentsApi, ManualAdjustment } from '@/api/manualAdjustments';
 import { groupsApi, GroupMember } from '@/api/groups';
 import { rankingApi } from '@/api/ranking';
+import { cardsApi, CardConfig, CardDeal, CardKey, ALL_CARD_KEYS, CARD_LABELS, CARD_DESCRIPTIONS } from '@/api/cards';
 import { useAuth } from '@/context/AuthContext';
 
 // ─── Rule row ──────────────────────────────────────────────────────────────
@@ -143,7 +144,7 @@ export default function AdminPanelScreen() {
   const theme = useTheme();
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState<'rules' | 'multipliers' | 'matches' | 'penalties' | 'adjustments'>('rules');
+  const [tab, setTab] = useState<'rules' | 'multipliers' | 'matches' | 'penalties' | 'adjustments' | 'cards'>('rules');
 
   // ── Rules ──────────────────────────────────────────────────────────────────
   const [localRules, setLocalRules] = useState<RuleEntry[] | null>(null);
@@ -340,12 +341,71 @@ export default function AdminPanelScreen() {
   const adjMoneyNum = adjMoney !== '' ? parseFloat(adjMoney) : 0;
   const canCreateAdj = adjUserId.length > 0 && (adjPtsNum !== 0 || adjMoneyNum !== 0) && !isNaN(adjPtsNum) && !isNaN(adjMoneyNum);
 
+  // ── Cards ──────────────────────────────────────────────────────────────────
+  const [localEnabledCards, setLocalEnabledCards] = useState<CardKey[] | null>(null);
+  const [localMelaLimit, setLocalMelaLimit] = useState('5');
+  const [cardsSaved, setCardsSaved] = useState(false);
+  const [cardMatchday, setCardMatchday] = useState('1');
+
+  const { data: cardConfigData, isLoading: cardConfigLoading } = useQuery({
+    queryKey: ['card-config', groupId, season],
+    queryFn: () => cardsApi.getConfig(groupId, season),
+    enabled: tab === 'cards',
+  });
+  if (cardConfigData !== undefined && localEnabledCards === null) {
+    const cfg: CardConfig | null = cardConfigData.config;
+    setLocalEnabledCards(cfg?.enabledCards ?? []);
+    setLocalMelaLimit(String(cfg?.melaJuegoLimit ?? 5));
+  }
+
+  const { mutate: saveCardConfig, isPending: savingCards } = useMutation({
+    mutationFn: () => cardsApi.updateConfig(groupId, {
+      season,
+      enabledCards: localEnabledCards ?? [],
+      melaJuegoLimit: parseInt(localMelaLimit, 10) || 5,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['card-config', groupId, season] }); setCardsSaved(true); },
+  });
+
+  function toggleCard(key: CardKey) {
+    setLocalEnabledCards((prev) => {
+      const c = prev ?? [];
+      return c.includes(key) ? c.filter((k) => k !== key) : [...c, key];
+    });
+    setCardsSaved(false);
+  }
+
+  const cardMatchdayNum = parseInt(cardMatchday, 10);
+  const validCardMatchday = !isNaN(cardMatchdayNum) && cardMatchdayNum >= 1;
+
+  const { data: dealsData, isLoading: dealsLoading } = useQuery({
+    queryKey: ['card-deals', groupId, season, cardMatchday],
+    queryFn: () => cardsApi.getAllDeals(groupId, season, cardMatchdayNum),
+    enabled: tab === 'cards' && validCardMatchday,
+  });
+
+  const { mutate: triggerDeal, isPending: triggeringDeal } = useMutation({
+    mutationFn: () => cardsApi.triggerDeal(groupId, { season, matchday: cardMatchdayNum }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['card-deals', groupId, season, cardMatchday] }),
+  });
+
+  const { mutate: redealAll, isPending: redealingAll } = useMutation({
+    mutationFn: () => cardsApi.redealAll(groupId, { season, matchday: cardMatchdayNum }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['card-deals', groupId, season, cardMatchday] }),
+  });
+
+  const { mutate: redealOne } = useMutation({
+    mutationFn: (userId: string) => cardsApi.redealUser(groupId, { season, matchday: cardMatchdayNum, userId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['card-deals', groupId, season, cardMatchday] }),
+  });
+
   // ── Tabs ───────────────────────────────────────────────────────────────────
-  const tabs: Array<{ key: 'rules' | 'multipliers' | 'matches' | 'penalties' | 'adjustments'; label: string }> = [
+  const tabs: Array<{ key: 'rules' | 'multipliers' | 'matches' | 'penalties' | 'adjustments' | 'cards'; label: string }> = [
     { key: 'rules', label: 'Reglas' },
     { key: 'multipliers', label: 'Multiplicadores' },
     { key: 'penalties', label: 'Bote' },
     { key: 'adjustments', label: 'Ajustes' },
+    { key: 'cards', label: 'Cartas' },
     ...(isGlobalAdmin ? [{ key: 'matches' as const, label: 'Partidos' }] : []),
   ];
 
@@ -578,6 +638,117 @@ export default function AdminPanelScreen() {
         </>
       )}
 
+      {/* ── CARDS ── */}
+      {tab === 'cards' && (
+        <>
+          {/* Card toggles */}
+          <Text variant="titleSmall" style={styles.sectionTitle}>Cartas activas</Text>
+          <Text variant="bodySmall" style={styles.compNote}>Activa las cartas que quieres incluir en tu peña. Cada jugador recibirá una carta aleatoria de entre las activas por jornada.</Text>
+
+          {cardConfigLoading || localEnabledCards === null ? <ActivityIndicator style={{ marginTop: 12 }} /> : (
+            <>
+              {ALL_CARD_KEYS.map((key) => (
+                <View key={key} style={styles.cardRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>{CARD_LABELS[key]}</Text>
+                    <Text variant="bodySmall" style={{ opacity: 0.55 }}>{CARD_DESCRIPTIONS[key]}</Text>
+                  </View>
+                  <Switch
+                    value={localEnabledCards.includes(key)}
+                    onValueChange={() => toggleCard(key)}
+                  />
+                </View>
+              ))}
+
+              <View style={styles.ruleRow}>
+                <Text variant="bodyMedium" style={{ flex: 1 }}>Límite «Me la Juego» (pts)</Text>
+                <TextInput
+                  value={localMelaLimit}
+                  onChangeText={(v) => { setLocalMelaLimit(v); setCardsSaved(false); }}
+                  keyboardType="numeric"
+                  mode="outlined"
+                  dense
+                  style={styles.pointsInput}
+                  label="pts"
+                />
+              </View>
+
+              <View style={styles.saveRow}>
+                {cardsSaved && <Text variant="labelMedium" style={{ color: theme.colors.primary }}>✓ Guardado</Text>}
+                <Button mode="contained" onPress={() => saveCardConfig()} loading={savingCards} disabled={savingCards} style={{ flex: 1 }}>
+                  Guardar cartas
+                </Button>
+              </View>
+            </>
+          )}
+
+          <Divider style={styles.divider} />
+
+          {/* Deal management */}
+          <Text variant="titleSmall" style={styles.sectionTitle}>Reparto por jornada</Text>
+          <View style={styles.ruleRow}>
+            <Text variant="bodyMedium" style={{ flex: 1 }}>Jornada</Text>
+            <TextInput
+              value={cardMatchday}
+              onChangeText={setCardMatchday}
+              keyboardType="numeric"
+              mode="outlined"
+              dense
+              style={styles.pointsInput}
+              label="J"
+            />
+          </View>
+
+          <View style={styles.tabRow}>
+            <Button
+              mode="outlined"
+              style={{ flex: 1 }}
+              onPress={() => triggerDeal()}
+              loading={triggeringDeal}
+              disabled={triggeringDeal || !validCardMatchday}
+            >
+              Repartir cartas
+            </Button>
+            <Button
+              mode="outlined"
+              style={{ flex: 1 }}
+              onPress={() => redealAll()}
+              loading={redealingAll}
+              disabled={redealingAll || !validCardMatchday}
+            >
+              Rerepartir pendientes
+            </Button>
+          </View>
+
+          {validCardMatchday && (
+            <>
+              {dealsLoading && <ActivityIndicator style={{ marginTop: 8 }} />}
+              {!dealsLoading && (dealsData?.deals.length ?? 0) === 0 && (
+                <Text style={{ opacity: 0.5, marginTop: 8 }}>Sin cartas repartidas en J{cardMatchday}.</Text>
+              )}
+              {dealsData?.deals.map((deal: CardDeal) => {
+                const userObj = typeof deal.user === 'object' ? deal.user : null;
+                const alias = userObj?.alias ?? 'Usuario';
+                const statusColor = deal.status === 'played' ? '#15803D' : deal.status === 'expired' ? '#6B7280' : theme.colors.primary;
+                const statusLabel = deal.status === 'played' ? 'Jugada' : deal.status === 'expired' ? 'Expirada' : 'Pendiente';
+                return (
+                  <List.Item
+                    key={deal._id}
+                    title={alias}
+                    description={`${CARD_LABELS[deal.card]} · ${statusLabel}`}
+                    descriptionStyle={{ color: statusColor }}
+                    right={() => deal.status === 'pending'
+                      ? <IconButton icon="shuffle-variant" onPress={() => redealOne(typeof deal.user === 'object' ? deal.user._id : deal.user as string)} />
+                      : null
+                    }
+                  />
+                );
+              })}
+            </>
+          )}
+        </>
+      )}
+
       {/* ── MATCHES (global admin) ── */}
       {tab === 'matches' && isGlobalAdmin && (
         <>
@@ -627,4 +798,5 @@ const styles = StyleSheet.create({
   penaltyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   dateRow: { flexDirection: 'row', gap: 8 },
   adjRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
 });
