@@ -19,6 +19,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminGroupApi, RuleEntry, GroupFeature } from '@/api/adminGroup';
 import { adminMatchesApi } from '@/api/adminMatches';
 import { predictionsApi, Match } from '@/api/predictions';
+import { penaltiesApi, PenaltyEntry } from '@/api/penalties';
 import { useAuth } from '@/context/AuthContext';
 
 // ─── Rule row ──────────────────────────────────────────────────────────────
@@ -139,7 +140,7 @@ export default function AdminPanelScreen() {
   const theme = useTheme();
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState<'rules' | 'multipliers' | 'matches'>('rules');
+  const [tab, setTab] = useState<'rules' | 'multipliers' | 'matches' | 'penalties'>('rules');
 
   // ── Rules ──────────────────────────────────────────────────────────────────
   const [localRules, setLocalRules] = useState<RuleEntry[] | null>(null);
@@ -252,10 +253,43 @@ export default function AdminPanelScreen() {
 
   const canCreateMatch = newHome.trim().length > 0 && newAway.trim().length > 0 && newDate.length === 10;
 
+  // ── Penalties ──────────────────────────────────────────────────────────────
+  const [localPenalties, setLocalPenalties] = useState<PenaltyEntry[]>([
+    { position: 1, amount: 0 },
+    { position: 2, amount: 0 },
+    { position: 3, amount: 0 },
+  ]);
+  const [penaltiesSaved, setPenaltiesSaved] = useState(false);
+
+  const { data: penaltyConfig } = useQuery({
+    queryKey: ['penalty-config', groupId, season],
+    queryFn: () => penaltiesApi.getConfig(groupId, season),
+    enabled: tab === 'penalties',
+  });
+  if (penaltyConfig && localPenalties[0].amount === 0 && penaltyConfig.penalties.length > 0) {
+    setLocalPenalties(penaltyConfig.penalties.map((p) => ({ ...p })));
+  }
+
+  const { mutate: savePenalties, isPending: savingPenalties } = useMutation({
+    mutationFn: () => penaltiesApi.updateConfig(groupId, season, localPenalties),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['penalty-config', groupId, season] }); setPenaltiesSaved(true); },
+  });
+
+  const { mutate: recalculate, isPending: recalculating } = useMutation({
+    mutationFn: () => penaltiesApi.recalculate(groupId, season),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['debt', groupId, season] }),
+  });
+
+  function patchPenalty(position: number, amount: number) {
+    setLocalPenalties((prev) => prev.map((p) => p.position === position ? { ...p, amount } : p));
+    setPenaltiesSaved(false);
+  }
+
   // ── Tabs ───────────────────────────────────────────────────────────────────
-  const tabs: Array<{ key: 'rules' | 'multipliers' | 'matches'; label: string }> = [
+  const tabs: Array<{ key: 'rules' | 'multipliers' | 'matches' | 'penalties'; label: string }> = [
     { key: 'rules', label: 'Reglas' },
     { key: 'multipliers', label: 'Multiplicadores' },
+    { key: 'penalties', label: 'Bote' },
     ...(isGlobalAdmin ? [{ key: 'matches' as const, label: 'Partidos' }] : []),
   ];
 
@@ -366,6 +400,49 @@ export default function AdminPanelScreen() {
         </>
       )}
 
+      {/* ── PENALTIES / BOTE ── */}
+      {tab === 'penalties' && (
+        <>
+          <Text variant="titleSmall" style={styles.sectionTitle}>Penalización por jornada</Text>
+          <Text variant="bodySmall" style={styles.compNote}>
+            Configura cuántos euros ficticioss acumula cada posición de los últimos de la jornada. 0 = sin penalización.
+          </Text>
+          {[1, 2, 3].map((pos) => {
+            const label = pos === 1 ? 'Último' : pos === 2 ? 'Penúltimo' : 'Antepenúltimo';
+            const entry = localPenalties.find((p) => p.position === pos) ?? { position: pos, amount: 0 };
+            return (
+              <View key={pos} style={styles.penaltyRow}>
+                <Text variant="bodyMedium" style={{ flex: 1 }}>{label}</Text>
+                <TextInput
+                  value={String(entry.amount)}
+                  onChangeText={(v) => { const n = parseFloat(v); if (!isNaN(n) && n >= 0) patchPenalty(pos, n); }}
+                  keyboardType="numeric"
+                  mode="outlined"
+                  dense
+                  style={styles.pointsInput}
+                  label="€"
+                />
+              </View>
+            );
+          })}
+          <View style={styles.saveRow}>
+            {penaltiesSaved && <Text variant="labelMedium" style={{ color: theme.colors.primary }}>✓ Guardado</Text>}
+            <Button mode="contained" onPress={() => savePenalties()} loading={savingPenalties} disabled={savingPenalties} style={{ flex: 1 }}>
+              Guardar
+            </Button>
+          </View>
+
+          <Divider style={styles.divider} />
+          <Text variant="titleSmall" style={styles.sectionTitle}>Recalcular deuda</Text>
+          <Text variant="bodySmall" style={styles.compNote}>
+            Aplica la configuración actual a todas las jornadas ya jugadas, sobreescribiendo los cálculos anteriores.
+          </Text>
+          <Button mode="outlined" icon="calculator" onPress={() => recalculate()} loading={recalculating} disabled={recalculating}>
+            Recalcular toda la deuda
+          </Button>
+        </>
+      )}
+
       {/* ── MATCHES (global admin) ── */}
       {tab === 'matches' && isGlobalAdmin && (
         <>
@@ -412,5 +489,6 @@ const styles = StyleSheet.create({
   resultForm: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' },
   scoreInput: { width: 80 },
   qualRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  penaltyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   dateRow: { flexDirection: 'row', gap: 8 },
 });

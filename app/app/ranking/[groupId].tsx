@@ -1,45 +1,37 @@
+import { useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Avatar, Surface, Text } from 'react-native-paper';
+import { ActivityIndicator, Avatar, Chip, IconButton, Surface, Text, useTheme } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { rankingApi, RankingEntry } from '@/api/ranking';
+import { penaltiesApi, RankingEntry as MatchdayRankingEntry, DebtEntry } from '@/api/penalties';
 import { useAuth } from '@/context/AuthContext';
 
 const MEDAL_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
 
-function RankingRow({
+function SeasonRow({
   entry,
   position,
   isMe,
+  debt,
 }: {
   entry: RankingEntry;
   position: number;
   isMe: boolean;
+  debt: number;
 }) {
   const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
 
   return (
-    <Surface
-      style={[styles.row, isMe && styles.rowMe]}
-      elevation={isMe ? 2 : 1}
-    >
+    <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
       <View style={[styles.positionBox, medalColor ? { backgroundColor: medalColor } : styles.positionBoxDefault]}>
-        <Text variant="titleMedium" style={styles.positionText}>
-          {position}
-        </Text>
+        <Text variant="titleMedium" style={styles.positionText}>{position}</Text>
       </View>
-
-      <Avatar.Text
-        size={36}
-        label={entry.user.alias.slice(0, 2).toUpperCase()}
-        style={styles.avatar}
-      />
-
+      <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
       <View style={styles.userInfo}>
         <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]}>
-          {entry.user.alias}
-          {isMe ? '  (tú)' : ''}
+          {entry.user.alias}{isMe ? '  (tú)' : ''}
         </Text>
         {entry.exactScores > 0 && (
           <Text variant="labelSmall" style={styles.exactScores}>
@@ -47,7 +39,40 @@ function RankingRow({
           </Text>
         )}
       </View>
+      <View style={styles.rightCol}>
+        <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
+          {entry.points} pts
+        </Text>
+        {debt > 0 && (
+          <Text variant="labelSmall" style={styles.debt}>💸 {debt}€</Text>
+        )}
+      </View>
+    </Surface>
+  );
+}
 
+function MatchdayRow({
+  entry,
+  position,
+  isMe,
+}: {
+  entry: MatchdayRankingEntry;
+  position: number;
+  isMe: boolean;
+}) {
+  const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
+
+  return (
+    <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
+      <View style={[styles.positionBox, medalColor ? { backgroundColor: medalColor } : styles.positionBoxDefault]}>
+        <Text variant="titleMedium" style={styles.positionText}>{position}</Text>
+      </View>
+      <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
+      <View style={styles.userInfo}>
+        <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]}>
+          {entry.user.alias}{isMe ? '  (tú)' : ''}
+        </Text>
+      </View>
       <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
         {entry.points} pts
       </Text>
@@ -58,114 +83,128 @@ function RankingRow({
 export default function RankingScreen() {
   const { groupId, season } = useLocalSearchParams<{ groupId: string; season: string }>();
   const { user } = useAuth();
+  const theme = useTheme();
+  const [view, setView] = useState<'season' | 'matchday'>('season');
+  const [matchday, setMatchday] = useState(1);
 
-  const { data: ranking, isLoading, isError } = useQuery({
+  const { data: seasonRanking, isLoading: loadingSeason } = useQuery({
     queryKey: ['ranking', groupId, season],
     queryFn: () => rankingApi.get(groupId, season),
+    enabled: view === 'season',
   });
 
-  if (isLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  const { data: debt } = useQuery({
+    queryKey: ['debt', groupId, season],
+    queryFn: () => penaltiesApi.getDebt(groupId, season),
+    enabled: view === 'season',
+    staleTime: 5 * 60 * 1000,
+  });
 
-  if (isError || !ranking) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>No se pudo cargar el ranking</Text>
-      </View>
-    );
-  }
+  const { data: matchdayData, isLoading: loadingMatchday } = useQuery({
+    queryKey: ['ranking-matchday', groupId, season, matchday],
+    queryFn: () => penaltiesApi.getMatchdayRanking(groupId, season, matchday),
+    enabled: view === 'matchday',
+  });
+
+  const debtMap = useMemo(() => {
+    const map = new Map<string, number>();
+    debt?.forEach((d) => map.set(d.user.id, d.total));
+    return map;
+  }, [debt]);
+
+  const isLoading = view === 'season' ? loadingSeason : loadingMatchday;
 
   return (
     <View style={styles.container}>
-      <Text variant="labelMedium" style={styles.seasonLabel}>Temporada {season}</Text>
+      <View style={styles.viewToggle}>
+        <Chip selected={view === 'season'} onPress={() => setView('season')} style={{ flex: 1 }}>
+          Temporada
+        </Chip>
+        <Chip selected={view === 'matchday'} onPress={() => setView('matchday')} style={{ flex: 1 }}>
+          Por jornada
+        </Chip>
+      </View>
 
-      <FlatList
-        data={ranking}
-        keyExtractor={(entry) => entry.user.id}
-        renderItem={({ item, index }) => (
-          <RankingRow
-            entry={item}
-            position={index + 1}
-            isMe={item.user.id === user?.id}
+      {view === 'matchday' && (
+        <View style={styles.matchdayNav}>
+          <IconButton
+            icon="chevron-left"
+            size={28}
+            onPress={() => setMatchday((d) => Math.max(1, d - 1))}
+            disabled={matchday <= 1}
           />
-        )}
-        contentContainerStyle={styles.list}
-      />
+          <Text variant="titleMedium" style={{ fontWeight: '600' }}>Jornada {matchday}</Text>
+          <IconButton
+            icon="chevron-right"
+            size={28}
+            onPress={() => setMatchday((d) => Math.min(38, d + 1))}
+            disabled={matchday >= 38}
+          />
+        </View>
+      )}
+
+      {view === 'season' && (
+        <Text variant="labelMedium" style={styles.seasonLabel}>Temporada {season}</Text>
+      )}
+
+      {isLoading ? (
+        <View style={styles.centered}><ActivityIndicator size="large" /></View>
+      ) : view === 'season' ? (
+        <FlatList
+          data={seasonRanking}
+          keyExtractor={(e) => e.user.id}
+          renderItem={({ item, index }) => (
+            <SeasonRow
+              entry={item}
+              position={index + 1}
+              isMe={item.user.id === user?.id}
+              debt={debtMap.get(item.user.id) ?? 0}
+            />
+          )}
+          contentContainerStyle={styles.list}
+        />
+      ) : (
+        <FlatList
+          data={matchdayData?.ranking}
+          keyExtractor={(e) => e.user.id}
+          renderItem={({ item, index }) => (
+            <MatchdayRow
+              entry={item}
+              position={index + 1}
+              isMe={item.user.id === user?.id}
+            />
+          )}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            !loadingMatchday ? (
+              <Text style={styles.empty}>Sin datos para esta jornada todavía.</Text>
+            ) : null
+          }
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  seasonLabel: {
-    textAlign: 'center',
-    opacity: 0.5,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  list: {
-    padding: 12,
-    gap: 8,
-    paddingBottom: 32,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 10,
-    padding: 10,
-    gap: 10,
-  },
-  rowMe: {
-    borderWidth: 1.5,
-    borderColor: '#1565C0',
-  },
-  positionBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  positionBoxDefault: {
-    backgroundColor: '#E0E0E0',
-  },
-  positionText: {
-    fontWeight: '700',
-    color: '#fff',
-  },
-  avatar: {
-    backgroundColor: '#90A4AE',
-  },
-  userInfo: {
-    flex: 1,
-  },
-  alias: {
-    fontWeight: '500',
-  },
-  aliasMe: {
-    color: '#1565C0',
-    fontWeight: '700',
-  },
-  exactScores: {
-    opacity: 0.5,
-    marginTop: 1,
-  },
-  points: {
-    fontWeight: '700',
-  },
-  errorText: {
-    color: '#9C3B2C',
-  },
+  container: { flex: 1 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  viewToggle: { flexDirection: 'row', gap: 8, padding: 12, paddingBottom: 4 },
+  matchdayNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8 },
+  seasonLabel: { textAlign: 'center', opacity: 0.5, paddingTop: 4, paddingBottom: 4 },
+  list: { padding: 12, gap: 8, paddingBottom: 32 },
+  row: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 10, gap: 10 },
+  rowMe: { borderWidth: 1.5, borderColor: '#1565C0' },
+  positionBox: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  positionBoxDefault: { backgroundColor: '#E0E0E0' },
+  positionText: { fontWeight: '700', color: '#fff' },
+  avatar: { backgroundColor: '#90A4AE' },
+  userInfo: { flex: 1 },
+  alias: { fontWeight: '500' },
+  aliasMe: { color: '#1565C0', fontWeight: '700' },
+  exactScores: { opacity: 0.5, marginTop: 1 },
+  rightCol: { alignItems: 'flex-end', gap: 2 },
+  points: { fontWeight: '700' },
+  debt: { color: '#B45309', fontWeight: '600' },
+  empty: { textAlign: 'center', opacity: 0.5, marginTop: 32 },
 });
