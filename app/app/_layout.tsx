@@ -75,6 +75,7 @@ function RootLayoutNav() {
               <Stack.Screen name="groups/join" options={{ presentation: 'modal', title: 'Unirse a peña' }} />
               <Stack.Screen name="predictions/[season]" options={{ title: 'Predicciones' }} />
               <Stack.Screen name="predictions/edit/[matchId]" options={{ presentation: 'modal', title: 'Tu predicción' }} />
+              <Stack.Screen name="predictions/view/[matchId]" options={{ title: 'Predicciones del partido' }} />
               <Stack.Screen name="ranking/[groupId]" options={{ title: 'Ranking' }} />
               <Stack.Screen name="standings-prediction/[season]" options={{ title: 'Clasificación' }} />
               <Stack.Screen name="award-prediction/[season]" options={{ title: 'Premios' }} />
