@@ -5,14 +5,16 @@ export interface IPredictionScore extends Document {
   prediction: Types.ObjectId;
   group: Types.ObjectId;
   points: number;
+  preCardPoints: number;
   ruleBreakdown: IRuleBreakdownItem[];
   multiplierApplied?: number;
 }
 
 const predictionScoreSchema = new Schema<IPredictionScore>({
-  prediction: { type: Schema.Types.ObjectId, ref: 'Prediction', required: true },
-  group: { type: Schema.Types.ObjectId, ref: 'Group', required: true },
-  points: { type: Number, required: true },
+  prediction:    { type: Schema.Types.ObjectId, ref: 'Prediction', required: true },
+  group:         { type: Schema.Types.ObjectId, ref: 'Group', required: true },
+  points:        { type: Number, required: true },
+  preCardPoints: { type: Number, required: true, default: 0 },
   ruleBreakdown: [ruleBreakdownSchema],
   multiplierApplied: { type: Number },
 });
