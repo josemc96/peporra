@@ -65,11 +65,14 @@ export async function scoreMatchPredictions(): Promise<ScoreMatchPredictionsResu
       await PredictionScore.findOneAndUpdate(
         { prediction: prediction._id, group: group._id },
         {
-          prediction: prediction._id,
-          group: group._id,
-          points: finalPoints,
-          ruleBreakdown,
-          multiplierApplied: multiplier > 1 ? multiplier : undefined,
+          $set: {
+            prediction: prediction._id,
+            group: group._id,
+            points: finalPoints,
+            preCardPoints: finalPoints,
+            ruleBreakdown,
+            multiplierApplied: multiplier > 1 ? multiplier : undefined,
+          },
         },
         { upsert: true }
       );

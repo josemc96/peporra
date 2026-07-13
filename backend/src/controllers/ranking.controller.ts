@@ -10,6 +10,7 @@ import { AwardPrediction } from '../models/AwardPrediction';
 import { AwardPredictionScore } from '../models/AwardPredictionScore';
 import { User } from '../models/User';
 import { ManualAdjustment } from '../models/ManualAdjustment';
+import { CardEffect } from '../models/CardEffect';
 import { AppError } from '../utils/AppError';
 import { requireGroupMember } from '../services/groupAuth.service';
 
@@ -103,6 +104,12 @@ export async function getGroupRanking(req: Request, res: Response): Promise<void
   for (const adj of manualAdjustments) {
     const key = adj.user.toString();
     if (totals.has(key)) totals.set(key, (totals.get(key) ?? 0) + adj.points);
+  }
+
+  const cardEffects = await CardEffect.find({ group: groupId, season });
+  for (const effect of cardEffects) {
+    const key = effect.user.toString();
+    if (totals.has(key)) totals.set(key, (totals.get(key) ?? 0) + effect.points);
   }
 
   const users = await User.find({ _id: { $in: memberIds } }).select('alias email');
