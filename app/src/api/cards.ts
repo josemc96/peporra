@@ -78,6 +78,15 @@ export interface CardPlay {
   playedAt: string;
 }
 
+export interface ActiveCardPlay {
+  _id: string;
+  deal: { _id: string; card: CardKey; user: { _id: string; alias: string } };
+  targetUser?: { _id: string; alias: string };
+  targetMatch?: { _id: string; homeTeam: string; awayTeam: string; startTime: string; matchday: number };
+  params: { side?: 'home' | 'away'; delta?: number; amount?: number; copiedUserId?: string };
+  playedAt: string;
+}
+
 const base = (groupId: string) => `/groups/${groupId}/cards`;
 const json = (body: unknown) => ({ method: 'POST', body: JSON.stringify(body) });
 const put = (body: unknown) => ({ method: 'PUT', body: JSON.stringify(body) });
@@ -117,6 +126,6 @@ export const cardsApi = {
   }> =>
     apiFetch(`${base(groupId)}/spy/${matchId}`),
 
-  getActiveCardPlays: (groupId: string, season: string, matchday: number): Promise<{ plays: Array<{ card: CardKey; userId: string; targetMatchId?: string; targetUserId?: string }> }> =>
+  getActiveCardPlays: (groupId: string, season: string, matchday: number): Promise<{ plays: ActiveCardPlay[] }> =>
     apiFetch(`${base(groupId)}/active?season=${encodeURIComponent(season)}&matchday=${matchday}`),
 };

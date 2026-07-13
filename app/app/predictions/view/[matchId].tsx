@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { matchVisibilityApi } from '@/api/matchVisibility';
+import { cardsApi, ActiveCardPlay, CardKey, CARD_LABELS, CARD_EMOJI } from '@/api/cards';
 import { useAuth } from '@/context/AuthContext';
 
 function formatDate(iso: string): string {
@@ -24,11 +25,53 @@ function UserChip({ alias, isMe }: { alias: string; isMe: boolean }) {
   );
 }
 
+function cardPlayDescription(play: ActiveCardPlay): string {
+  const card = play.deal.card as CardKey;
+  const owner = play.deal.user.alias;
+  const target = play.targetUser?.alias;
+  const { side, delta, amount } = play.params;
+
+  switch (card) {
+    case 'la_mina':     return `${owner} plantó la mina — quien tenga el mismo resultado puntúa 0`;
+    case 'la_roja':     return `${owner} le puso tarjeta roja a ${target ?? '?'} — pierde todos sus puntos`;
+    case 'la_lesion':   return `${owner} lesionó a ${target ?? '?'} — la mitad de sus puntos`;
+    case 'el_doblete':  return `${owner} activó el doblete — sus puntos base se duplican`;
+    case 'el_autobus':  return `${owner} subió al autobús — inmune y garantiza mínimo 1 pt`;
+    case 'el_var': {
+      const sideLabel = side === 'home' ? 'local' : 'visitante';
+      const deltaStr  = delta === 1 ? '+1' : '-1';
+      return `${owner} usó el VAR en ${target ?? '?'}: gol ${sideLabel} ${deltaStr}`;
+    }
+    case 'rueda_prensa': return `${owner} habló en rueda de prensa — puntos extra para ${target ?? '?'}`;
+    case 'me_la_juego':  return `${owner} apostó ${amount ?? '?'} pts — gana si acierta resultado exacto`;
+    case 'el_espia':     return `${owner} espió las predicciones de este partido`;
+    default:             return `${owner} jugó ${CARD_LABELS[card] ?? card}`;
+  }
+}
+
+function CardPlayRow({ play, myId }: { play: ActiveCardPlay; myId: string }) {
+  const theme = useTheme();
+  const card = play.deal.card as CardKey;
+  const isMe = play.deal.user._id === myId || play.targetUser?._id === myId;
+
+  return (
+    <View style={[styles.cardPlayRow, isMe && { backgroundColor: theme.colors.primaryContainer, borderRadius: 8 }]}>
+      <Text style={styles.cardPlayEmoji}>{CARD_EMOJI[card] ?? '🃏'}</Text>
+      <View style={{ flex: 1 }}>
+        <Text variant="labelMedium" style={{ fontWeight: '700' }}>{CARD_LABELS[card]}</Text>
+        <Text variant="bodySmall" style={{ opacity: 0.7 }}>{cardPlayDescription(play)}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function MatchPredictionViewScreen() {
-  const { matchId, groupId, homeTeam, awayTeam, startTime, homeScore, awayScore } =
+  const { matchId, groupId, season, matchday, homeTeam, awayTeam, startTime, homeScore, awayScore } =
     useLocalSearchParams<{
       matchId: string;
       groupId: string;
+      season?: string;
+      matchday?: string;
       homeTeam: string;
       awayTeam: string;
       startTime: string;
@@ -44,6 +87,19 @@ export default function MatchPredictionViewScreen() {
     queryFn: () => matchVisibilityApi.get(groupId, matchId),
     refetchInterval: 60_000,
   });
+
+  const matchdayNum = matchday ? parseInt(matchday, 10) : null;
+  const { data: cardPlaysData } = useQuery({
+    queryKey: ['card-plays', groupId, season, matchday],
+    queryFn: () => cardsApi.getActiveCardPlays(groupId, season!, matchdayNum!),
+    enabled: !!groupId && !!season && !!matchdayNum && (data?.phase === 'live' || data?.phase === 'finished'),
+    refetchInterval: 60_000,
+  });
+
+  // Solo mostrar las cartas que apuntaron a ESTE partido
+  const matchCardPlays = (cardPlaysData?.plays ?? []).filter(
+    (p) => p.targetMatch?._id === matchId
+  );
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
@@ -129,6 +185,16 @@ export default function MatchPredictionViewScreen() {
               </View>
             </>
           )}
+
+          {matchCardPlays.length > 0 && (
+            <>
+              <Divider style={styles.divider} />
+              <Text variant="titleSmall" style={styles.sectionTitle}>Cartas jugadas</Text>
+              {matchCardPlays.map((play) => (
+                <CardPlayRow key={play._id} play={play} myId={user?.id ?? ''} />
+              ))}
+            </>
+          )}
         </>
       )}
     </ScrollView>
@@ -161,4 +227,6 @@ const styles = StyleSheet.create({
   chipAvatar: { backgroundColor: '#90A4AE' },
   noPredLabel: { opacity: 0.5 },
   error: { color: '#9C3B2C', textAlign: 'center', marginTop: 32 },
+  cardPlayRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 8, paddingHorizontal: 4 },
+  cardPlayEmoji: { fontSize: 22, lineHeight: 28 },
 });
