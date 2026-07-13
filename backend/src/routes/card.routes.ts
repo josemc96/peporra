@@ -5,6 +5,7 @@ import {
   getMyDeal, getAllDeals, triggerDeal,
   redealUser, redealAll,
 } from '../controllers/card.controller';
+import { playCard, spyMatch, getActiveCardPlays } from '../controllers/cardPlay.controller';
 
 const router = Router({ mergeParams: true });
 
@@ -22,5 +23,10 @@ router.post('/deal',   triggerDeal);
 // Redeal
 router.post('/redeal',     redealUser);
 router.post('/redeal-all', redealAll);
+
+// Play
+router.post('/play',           playCard);
+router.get('/spy/:matchId',    spyMatch);
+router.get('/active',          getActiveCardPlays);
 
 export default router;
