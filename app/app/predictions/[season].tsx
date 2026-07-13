@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import { predictionsApi, Match, Prediction } from '@/api/predictions';
 import { adminGroupApi, ScoreMultiplier } from '@/api/adminGroup';
-
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('es-ES', {
@@ -31,11 +30,13 @@ function MatchCard({
   match,
   prediction,
   season,
+  groupId,
   multiplier,
 }: {
   match: Match;
   prediction: Prediction | undefined;
   season: string;
+  groupId: string;
   multiplier: number | null;
 }) {
   const isLocked = new Date() >= new Date(match.startTime);
@@ -56,8 +57,18 @@ function MatchCard({
     });
   }
 
+  function openView() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    router.push({ pathname: '/predictions/view/[matchId]' as any, params: {
+      matchId: match._id, groupId,
+      homeTeam: match.homeTeam, awayTeam: match.awayTeam, startTime: match.startTime,
+      homeScore: match.homeScore != null ? String(match.homeScore) : undefined,
+      awayScore: match.awayScore != null ? String(match.awayScore) : undefined,
+    }});
+  }
+
   return (
-    <Card style={styles.matchCard} onPress={isLocked ? undefined : openEditor}>
+    <Card style={styles.matchCard} onPress={isLocked ? openView : openEditor}>
       <Card.Content style={styles.cardContent}>
         <View style={styles.teamsRow}>
           <Text variant="titleSmall" style={styles.team} numberOfLines={1}>
@@ -203,6 +214,7 @@ export default function PredictionsScreen() {
             match={item}
             prediction={predictionMap.get(item._id)}
             season={season}
+            groupId={groupId ?? ''}
             multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
           />
         )}
