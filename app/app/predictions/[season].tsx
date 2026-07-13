@@ -6,6 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { predictionsApi, Match, Prediction } from '@/api/predictions';
 import { adminGroupApi, ScoreMultiplier } from '@/api/adminGroup';
+import { cardsApi, CARD_LABELS, CARD_EMOJI } from '@/api/cards';
+
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('es-ES', {
@@ -140,6 +142,12 @@ export default function PredictionsScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: myDeal } = useQuery({
+    queryKey: ['my-deal', groupId, season, selectedMatchday],
+    queryFn: () => cardsApi.getMyDeal(groupId!, season, selectedMatchday),
+    enabled: !!groupId && selectedMatchday > 0,
+  });
+
   const matchdays = useMemo(() => {
     if (!matches) return [];
     const days = [
@@ -206,6 +214,23 @@ export default function PredictionsScreen() {
           disabled={currentIdx >= matchdays.length - 1}
         />
       </View>
+
+      {/* Banner carta de jornada */}
+      {groupId && myDeal?.deal && (
+        <Button
+          mode={myDeal.deal.status === 'pending' ? 'contained-tonal' : 'text'}
+          compact
+          icon="cards-playing"
+          onPress={() => router.push({
+            pathname: '/cards/[groupId]',
+            params: { groupId, season, matchday: String(selectedMatchday) },
+          })}
+          style={styles.cardBanner}
+        >
+          {CARD_EMOJI[myDeal.deal.card]} {CARD_LABELS[myDeal.deal.card]}
+          {myDeal.deal.status === 'pending' ? ' · Jugar' : myDeal.deal.status === 'played' ? ' · Jugada' : ' · Expirada'}
+        </Button>
+      )}
 
       {/* Lista de partidos */}
       <FlatList
@@ -324,5 +349,9 @@ const styles = StyleSheet.create({
   noPrediction: {
     opacity: 0.4,
     fontStyle: 'italic',
+  },
+  cardBanner: {
+    marginHorizontal: 8,
+    marginVertical: 4,
   },
 });
