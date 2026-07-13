@@ -163,6 +163,15 @@ export function GroupDetail({ groupId, onLeave }: Props) {
           </Button>
         </View>
 
+        <Button
+          mode="outlined"
+          icon="cards-playing"
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push({ pathname: '/cards/[groupId]' as any, params: { groupId: group._id, season: group.season, matchday: '1' } })}
+        >
+          Mis cartas
+        </Button>
+
         {hasKnockout && (
           <Button
             mode="outlined"

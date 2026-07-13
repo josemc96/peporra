@@ -9,7 +9,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "seed:rules": "tsx src/scripts/seedRules.ts"
+    "seed:rules": "tsx src/scripts/seedRules.ts",
+    "seed:mock-cards": "tsx src/scripts/seedMockCards.ts",
+    "finish:mock-cards": "tsx src/scripts/finishMockCards.ts"
   },
   "keywords": [],
   "author": "",

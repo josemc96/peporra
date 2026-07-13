@@ -22,6 +22,19 @@ export const CARD_LABELS: Record<CardKey, string> = {
   me_la_juego: 'Me la Juego',
 };
 
+export const CARD_EMOJI: Record<CardKey, string> = {
+  la_mina: '💣',
+  la_roja: '🟥',
+  la_lesion: '🩹',
+  el_var: '📹',
+  el_autobus: '🚌',
+  el_espia: '🕵️',
+  rueda_prensa: '🎙️',
+  la_aficion: '📣',
+  el_doblete: '⚡',
+  me_la_juego: '🎲',
+};
+
 export const CARD_DESCRIPTIONS: Record<CardKey, string> = {
   la_mina: 'Quienes coincidan con tu resultado ese partido puntúan 0.',
   la_roja: 'Un rival pierde sus puntos en un partido.',
@@ -92,13 +105,17 @@ export const cardsApi = {
     apiFetch(`${base(groupId)}/redeal-all`, json(body)),
 
   playCard: (groupId: string, body: {
-    season: string;
-    matchday: number;
-    targetMatchId?: string;
+    dealId: string;
+    matchId?: string;
     targetUserId?: string;
     params?: Record<string, unknown>;
-  }): Promise<{ play: CardPlay }> =>
+  }): Promise<{ play: CardPlay; deal: CardDeal }> =>
     apiFetch(`${base(groupId)}/play`, json(body)),
+
+  spyMatch: (groupId: string, matchId: string): Promise<{
+    predictions: Array<{ user: { id: string; alias: string }; predictedHome: number; predictedAway: number }>;
+  }> =>
+    apiFetch(`${base(groupId)}/spy/${matchId}`),
 
   getActiveCardPlays: (groupId: string, season: string, matchday: number): Promise<{ plays: Array<{ card: CardKey; userId: string; targetMatchId?: string; targetUserId?: string }> }> =>
     apiFetch(`${base(groupId)}/active?season=${encodeURIComponent(season)}&matchday=${matchday}`),
