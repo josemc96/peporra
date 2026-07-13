@@ -100,14 +100,26 @@ export function GroupDetail({ groupId, onLeave }: Props) {
           Ranking
         </Button>
       </View>
-      <Button
-        mode="outlined"
-        icon="table"
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onPress={() => router.push({ pathname: '/standings-prediction/[season]' as any, params: { season: group.season } })}
-      >
-        Clasificación
-      </Button>
+      <View style={styles.secondaryButtons}>
+        <Button
+          mode="outlined"
+          icon="table"
+          style={styles.halfButton}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push({ pathname: '/standings-prediction/[season]' as any, params: { season: group.season } })}
+        >
+          Clasificación
+        </Button>
+        <Button
+          mode="outlined"
+          icon="medal"
+          style={styles.halfButton}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push({ pathname: '/award-prediction/[season]' as any, params: { season: group.season } })}
+        >
+          Premios
+        </Button>
+      </View>
 
       <Divider style={styles.divider} />
 
@@ -145,6 +157,8 @@ const styles = StyleSheet.create({
   season: { opacity: 0.6, marginBottom: 16 },
   actionButtons: { flexDirection: 'row', gap: 10, marginVertical: 4 },
   actionButton: { flex: 1 },
+  secondaryButtons: { flexDirection: 'row', gap: 10 },
+  halfButton: { flex: 1 },
   codeBox: { borderRadius: 8, padding: 16, marginVertical: 8 },
   codeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   codeLabel: { opacity: 0.6, marginBottom: 2 },

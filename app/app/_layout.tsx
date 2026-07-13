@@ -77,6 +77,7 @@ function RootLayoutNav() {
               <Stack.Screen name="predictions/edit/[matchId]" options={{ presentation: 'modal', title: 'Tu predicción' }} />
               <Stack.Screen name="ranking/[groupId]" options={{ title: 'Ranking' }} />
               <Stack.Screen name="standings-prediction/[season]" options={{ title: 'Clasificación' }} />
+              <Stack.Screen name="award-prediction/[season]" options={{ title: 'Premios' }} />
             </Stack>
             </AuthGuard>
           </PaperProvider>
