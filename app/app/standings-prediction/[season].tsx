@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
@@ -15,7 +15,6 @@ import DraggableFlatList, {
   RenderItemParams,
   ScaleDecorator,
 } from 'react-native-draggable-flatlist';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { standingsPredictionsApi } from '@/api/standingsPredictions';
 
@@ -87,9 +86,9 @@ export default function StandingsPredictionScreen() {
             {item}
           </Text>
           {!isLocked && (
-            <View style={styles.handle} onTouchStart={drag}>
+            <Pressable onPressIn={drag} style={styles.handle} hitSlop={8}>
               <Icon source="drag" size={24} color={theme.colors.onSurfaceVariant} />
-            </View>
+            </Pressable>
           )}
         </Surface>
       </ScaleDecorator>
@@ -113,7 +112,7 @@ export default function StandingsPredictionScreen() {
   }
 
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <View style={styles.root}>
       <View style={styles.phaseRow}>
         <Chip selected={phase === 'ida'} onPress={() => setPhase('ida')} style={styles.chip}>
           Ida (J19)
@@ -125,7 +124,7 @@ export default function StandingsPredictionScreen() {
 
       {!isLocked && (
         <Text variant="labelSmall" style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
-          Mantén pulsado el icono ≡ y arrastra para reordenar
+          Arrastra el icono ≡ para reordenar
         </Text>
       )}
       {isLocked && (
@@ -140,6 +139,7 @@ export default function StandingsPredictionScreen() {
         onDragEnd={({ data }) => { setTeamOrder(data); setSaved(false); }}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
+        style={styles.flatList}
       />
 
       {!isLocked && (
@@ -162,7 +162,7 @@ export default function StandingsPredictionScreen() {
           </Button>
         </View>
       )}
-    </GestureHandlerRootView>
+    </View>
   );
 }
 
@@ -173,6 +173,7 @@ const styles = StyleSheet.create({
   chip: { flex: 1 },
   hint: { textAlign: 'center', paddingHorizontal: 16, paddingBottom: 8, opacity: 0.6 },
   lockedNote: { textAlign: 'center', opacity: 0.5, paddingHorizontal: 16, paddingBottom: 8 },
+  flatList: { flex: 1 },
   list: { padding: 12, gap: 6, paddingBottom: 24 },
   row: {
     flexDirection: 'row',
