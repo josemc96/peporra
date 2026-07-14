@@ -24,6 +24,7 @@ export default function GroupsScreen() {
 
   async function handleSelect(g: GroupSummary) {
     await selectGroup({ id: g._id, season: g.season, name: g.name });
+    router.replace('/(tabs)/predictions');
   }
 
   if (isLoading) {
