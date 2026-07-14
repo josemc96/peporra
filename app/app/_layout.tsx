@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { CurrentGroupProvider } from '@/context/CurrentGroupContext';
 import { queryClient } from '@/config/queryClient';
 
 export { ErrorBoundary } from 'expo-router';
@@ -64,6 +65,7 @@ function RootLayoutNav() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
+          <CurrentGroupProvider>
           <PaperProvider theme={theme}>
             <AuthGuard>
               <Stack>
@@ -85,6 +87,7 @@ function RootLayoutNav() {
             </Stack>
             </AuthGuard>
           </PaperProvider>
+          </CurrentGroupProvider>
         </AuthProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
