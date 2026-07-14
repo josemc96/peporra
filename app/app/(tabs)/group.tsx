@@ -319,7 +319,7 @@ export default function GroupTab() {
         <Chip selected={mainTab === 'ranking'} onPress={() => setMainTab('ranking')} style={styles.chip}>
           Clasificación
         </Chip>
-        {hasPremios && (
+        {hasPremios && isSeasonLocked && (
           <Chip selected={mainTab === 'premios'} onPress={() => setMainTab('premios')} style={styles.chip}>
             Premios
           </Chip>
@@ -327,7 +327,7 @@ export default function GroupTab() {
       </View>
 
       {/* Contenido de Premios (no usa FlatList, es estático) */}
-      {mainTab === 'premios' && hasPremios && (
+      {mainTab === 'premios' && hasPremios && isSeasonLocked && (
         <PremiosSection
           groupId={groupId}
           season={season}
