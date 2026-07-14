@@ -3,6 +3,7 @@ import { scoreQualifierPredictions } from './scoreQualifierPredictions.job';
 import { scoreStandingsPredictions } from './scoreStandingsPredictions.job';
 import { scoreAwardPredictions } from './scoreAwardPredictions.job';
 import { applyMatchdayPenalties } from './applyMatchdayPenalties.job';
+import { applyCardEffects } from './applyCardEffects.job';
 
 export interface CalculateScoresResult {
   matchPredictionsScored: number;
@@ -19,7 +20,10 @@ export async function calculateScores(season: string): Promise<CalculateScoresRe
     scoreAwardPredictions(season),
   ]);
 
-  // Después de puntuar, aplicar penalizaciones de jornada para jornadas ya completas
+  // Aplicar efectos de cartas sobre los PredictionScore ya calculados
+  await applyCardEffects(season);
+
+  // Después de puntuar y aplicar cartas, aplicar penalizaciones de jornada
   await applyMatchdayPenalties();
 
   return {
