@@ -10,6 +10,15 @@ export interface AwardPrediction {
   status: 'pending' | 'scored';
 }
 
+export interface GroupAwardPrediction {
+  _id: string;
+  user: { _id: string; alias: string; email: string };
+  season: string;
+  award: Award;
+  predictedPlayer: string;
+  status: 'pending' | 'scored';
+}
+
 export interface Scorer {
   _id: string;
   season: string;
@@ -36,4 +45,9 @@ export const awardPredictionsApi = {
     apiFetch<{ scorers: Scorer[] }>(`/scorers?season=${encodeURIComponent(season)}`).then(
       (r) => r.scorers
     ),
+
+  getGroupPredictions: (groupId: string, season: string, award: Award) =>
+    apiFetch<{ predictions: GroupAwardPrediction[] }>(
+      `/groups/${groupId}/award-predictions?season=${encodeURIComponent(season)}&award=${award}`
+    ).then((r) => r.predictions),
 };

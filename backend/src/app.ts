@@ -17,6 +17,7 @@ import penaltyRoutes from './routes/penaltyConfig.routes';
 import manualAdjustmentRoutes from './routes/manualAdjustment.routes';
 import cardRoutes from './routes/card.routes';
 import { getMatchPredictionVisibility } from './controllers/matchPredictionVisibility.controller';
+import { getGroupAwardPredictions } from './controllers/awardPrediction.controller';
 import { requireAuth } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/errorHandler';
 
@@ -46,6 +47,7 @@ app.use('/api/groups/:groupId/penalties', penaltyRoutes);
 app.use('/api/groups/:groupId/adjustments', manualAdjustmentRoutes);
 app.use('/api/groups/:groupId/cards', cardRoutes);
 app.get('/api/groups/:groupId/matches/:matchId/predictions', requireAuth, getMatchPredictionVisibility);
+app.get('/api/groups/:groupId/award-predictions', requireAuth, getGroupAwardPredictions);
 
 app.use(errorHandler);
 
