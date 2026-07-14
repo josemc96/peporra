@@ -62,7 +62,8 @@ function MatchCard({
   function openView() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     router.push({ pathname: '/predictions/view/[matchId]' as any, params: {
-      matchId: match._id, groupId,
+      matchId: match._id, groupId, season,
+      matchday: match.matchday != null ? String(match.matchday) : undefined,
       homeTeam: match.homeTeam, awayTeam: match.awayTeam, startTime: match.startTime,
       homeScore: match.homeScore != null ? String(match.homeScore) : undefined,
       awayScore: match.awayScore != null ? String(match.awayScore) : undefined,

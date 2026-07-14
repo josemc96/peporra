@@ -42,7 +42,7 @@ export const CARD_DESCRIPTIONS: Record<CardKey, string> = {
   el_var: 'Modifica tu predicción de un partido ya iniciado (±1 al marcador).',
   el_autobus: 'Quedas inmune en un partido y tienes mínimo 1 punto.',
   el_espia: 'Consulta la predicción de un rival antes del partido.',
-  rueda_prensa: 'Añade puntos extras a tu predicción en un partido.',
+  rueda_prensa: 'Convocas a un rival: su predicción en un partido se hace pública para toda la peña, y si la cambia también se ve.',
   la_aficion: 'Recibes la mitad de puntos de un rival que quede en el podio de jornada.',
   el_doblete: 'Doblas tus puntos base en un partido.',
   me_la_juego: 'Apuesta X puntos en un partido: si aciertas resultado exacto ganas X, si no pierdes X/2.',
@@ -74,6 +74,15 @@ export interface CardPlay {
   deal: string;
   targetUser?: string;
   targetMatch?: string;
+  params: { side?: 'home' | 'away'; delta?: number; amount?: number; copiedUserId?: string };
+  playedAt: string;
+}
+
+export interface ActiveCardPlay {
+  _id: string;
+  deal: { _id: string; card: CardKey; user: { _id: string; alias: string } };
+  targetUser?: { _id: string; alias: string };
+  targetMatch?: { _id: string; homeTeam: string; awayTeam: string; startTime: string; matchday: number };
   params: { side?: 'home' | 'away'; delta?: number; amount?: number; copiedUserId?: string };
   playedAt: string;
 }
@@ -117,6 +126,6 @@ export const cardsApi = {
   }> =>
     apiFetch(`${base(groupId)}/spy/${matchId}`),
 
-  getActiveCardPlays: (groupId: string, season: string, matchday: number): Promise<{ plays: Array<{ card: CardKey; userId: string; targetMatchId?: string; targetUserId?: string }> }> =>
+  getActiveCardPlays: (groupId: string, season: string, matchday: number): Promise<{ plays: ActiveCardPlay[] }> =>
     apiFetch(`${base(groupId)}/active?season=${encodeURIComponent(season)}&matchday=${matchday}`),
 };
