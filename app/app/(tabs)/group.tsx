@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Avatar, Button, Chip, IconButton, Surface, Text, useTheme,
 } from 'react-native-paper';
 import { router } from 'expo-router';
+import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { rankingApi, RankingEntry } from '@/api/ranking';
@@ -65,6 +66,11 @@ function MatchdayRow({ entry, position, isMe }: {
 
 export default function GroupTab() {
   const { group, leaveGroup } = useCurrentGroup();
+
+  const handleLeave = useCallback(async () => {
+    await leaveGroup();
+    router.replace('/(tabs)/');
+  }, [leaveGroup]);
   const { user } = useAuth();
   const theme = useTheme();
   const [view, setView] = useState<'matchday' | 'season'>('matchday');
@@ -193,7 +199,7 @@ export default function GroupTab() {
             compact
             mode="text"
             icon="swap-horizontal"
-            onPress={() => leaveGroup()}
+            onPress={handleLeave}
           >
             Cambiar peña
           </Button>
