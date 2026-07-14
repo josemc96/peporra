@@ -29,7 +29,7 @@ function cardPlayDescription(play: ActiveCardPlay): string {
   const card = play.deal.card as CardKey;
   const owner = play.deal.user.alias;
   const target = play.targetUser?.alias;
-  const { side, delta, amount } = play.params;
+  const { side, delta, amount } = play.params ?? {};
 
   switch (card) {
     case 'la_mina':     return `${owner} plantó la mina — quien tenga el mismo resultado puntúa 0`;
