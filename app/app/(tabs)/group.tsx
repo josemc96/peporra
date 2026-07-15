@@ -12,7 +12,7 @@ import { rankingApi, RankingEntry } from '@/api/ranking';
 import { penaltiesApi, RankingEntry as MatchdayRankingEntry } from '@/api/penalties';
 import { adminGroupApi } from '@/api/adminGroup';
 import { groupsApi } from '@/api/groups';
-import { predictionsApi } from '@/api/predictions';
+import { apiFetch } from '@/api/client';
 import { awardPredictionsApi, Award } from '@/api/awardPredictions';
 import { useAuth } from '@/context/AuthContext';
 import { useCurrentGroup } from '@/context/CurrentGroupContext';
@@ -256,22 +256,14 @@ export default function GroupTab() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Detectar si la temporada ha empezado (mismo criterio que el backend: primer partido de La Liga)
-  const { data: matches } = useQuery({
-    queryKey: ['matches', season],
-    queryFn: () => predictionsApi.listMatches(season),
+  // Usar el endpoint del backend como única fuente de verdad para el bloqueo de temporada
+  const { data: seasonStatus } = useQuery({
+    queryKey: ['season-locked', season],
+    queryFn: () => apiFetch<{ locked: boolean }>(`/season/is-locked?season=${encodeURIComponent(season)}`),
     enabled: !!season,
     staleTime: 5 * 60 * 1000,
   });
-
-  const isSeasonLocked = useMemo(() => {
-    if (!matches?.length) return false;
-    // Igual que el backend: solo partidos pending de La Liga (los finished del seed no cuentan)
-    const pending = matches.filter((m) => m.competition === 'la_liga' && m.status === 'pending');
-    if (!pending.length) return false;
-    const kickoff = Math.min(...pending.map((m) => new Date(m.startTime).getTime()));
-    return Date.now() >= kickoff;
-  }, [matches]);
+  const isSeasonLocked = seasonStatus?.locked ?? false;
 
   const { data: seasonRanking, isLoading: loadingSeason } = useQuery({
     queryKey: ['ranking', groupId, season],

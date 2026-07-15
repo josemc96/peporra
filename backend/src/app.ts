@@ -18,6 +18,7 @@ import manualAdjustmentRoutes from './routes/manualAdjustment.routes';
 import cardRoutes from './routes/card.routes';
 import { getMatchPredictionVisibility } from './controllers/matchPredictionVisibility.controller';
 import { getGroupAwardPredictions } from './controllers/awardPrediction.controller';
+import { isSeasonLocked } from './services/season.service';
 import { requireAuth } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/errorHandler';
 
@@ -28,6 +29,13 @@ app.use(express.json());
 
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
+});
+
+app.get('/api/season/is-locked', requireAuth, async (req: Request, res: Response) => {
+  const { season } = req.query as { season?: string };
+  if (!season) { res.status(400).json({ error: 'season es obligatorio' }); return; }
+  const locked = await isSeasonLocked(season);
+  res.json({ locked });
 });
 
 app.use('/api/auth', authRoutes);
