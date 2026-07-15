@@ -100,28 +100,28 @@ export default function ProfileScreen() {
   const { data: pichichi } = useQuery({
     queryKey: ['my-award-prediction', season, 'pichichi'],
     queryFn: () => awardPredictionsApi.get(season, 'pichichi'),
-    enabled: hasPichichi && !!season,
+    enabled: isSeasonLocked && hasPichichi,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: zamora } = useQuery({
     queryKey: ['my-award-prediction', season, 'zamora'],
     queryFn: () => awardPredictionsApi.get(season, 'zamora'),
-    enabled: hasZamora && !!season,
+    enabled: isSeasonLocked && hasZamora,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: idaPrediction } = useQuery({
     queryKey: ['standings-prediction', season, 'ida'],
     queryFn: () => standingsPredictionsApi.get(season, 'ida'),
-    enabled: hasStandings && !!season,
+    enabled: isSeasonLocked && hasStandings,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: vueltaPrediction } = useQuery({
     queryKey: ['standings-prediction', season, 'vuelta'],
     queryFn: () => standingsPredictionsApi.get(season, 'vuelta'),
-    enabled: hasStandings && !!season,
+    enabled: isVueltaStarted && hasStandings,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -132,7 +132,7 @@ export default function ProfileScreen() {
     return { points: ranking[pos].points, exactScores: ranking[pos].exactScores, position: pos + 1, total: ranking.length };
   }, [ranking, user]);
 
-  const showBetsSection = !!group && (hasPichichi || hasZamora || hasStandings);
+  const showBetsSection = isSeasonLocked && !!group && (hasPichichi || hasZamora || hasStandings);
 
   async function handleLogout() {
     await logout();
@@ -211,7 +211,7 @@ export default function ProfileScreen() {
             )}
 
             {/* Clasificación Vuelta */}
-            {hasStandings && vueltaPrediction && (
+            {hasStandings && isVueltaStarted && vueltaPrediction && (
               <StandingsCard prediction={vueltaPrediction} phase="vuelta" />
             )}
           </View>
