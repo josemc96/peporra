@@ -285,7 +285,7 @@ export default function GroupTab() {
       </Surface>
 
       {/* Accesos rápidos */}
-      {(hasStandings || (!isSeasonLocked && hasPremios) || hasKnockout) && (
+      {(hasStandings || hasKnockout) && (
         <View style={styles.quickLinks}>
           {hasStandings && (
             <Button
@@ -293,14 +293,6 @@ export default function GroupTab() {
               onPress={() => router.push({ pathname: '/standings-prediction/[season]' as never, params: { season } })}
             >
               Clasificación
-            </Button>
-          )}
-          {!isSeasonLocked && hasPremios && (
-            <Button
-              mode="outlined" compact icon="medal" style={styles.quickBtn}
-              onPress={() => router.push({ pathname: '/award-prediction/[season]' as never, params: { season, groupId } })}
-            >
-              Premios
             </Button>
           )}
           {hasKnockout && (
@@ -319,7 +311,7 @@ export default function GroupTab() {
         <Chip selected={mainTab === 'ranking'} onPress={() => setMainTab('ranking')} style={styles.chip}>
           Clasificación
         </Chip>
-        {hasPremios && isSeasonLocked && (
+        {hasPremios && (
           <Chip selected={mainTab === 'premios'} onPress={() => setMainTab('premios')} style={styles.chip}>
             Premios
           </Chip>
@@ -327,7 +319,7 @@ export default function GroupTab() {
       </View>
 
       {/* Contenido de Premios (no usa FlatList, es estático) */}
-      {mainTab === 'premios' && hasPremios && isSeasonLocked && (
+      {mainTab === 'premios' && hasPremios && (
         <PremiosSection
           groupId={groupId}
           season={season}
