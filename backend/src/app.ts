@@ -18,7 +18,7 @@ import manualAdjustmentRoutes from './routes/manualAdjustment.routes';
 import cardRoutes from './routes/card.routes';
 import { getMatchPredictionVisibility } from './controllers/matchPredictionVisibility.controller';
 import { getGroupAwardPredictions } from './controllers/awardPrediction.controller';
-import { isSeasonLocked } from './services/season.service';
+import { isSeasonLocked, isVueltaStarted } from './services/season.service';
 import { requireAuth } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/errorHandler';
 
@@ -34,8 +34,8 @@ app.get('/health', (_req: Request, res: Response) => {
 app.get('/api/season/is-locked', requireAuth, async (req: Request, res: Response) => {
   const { season } = req.query as { season?: string };
   if (!season) { res.status(400).json({ error: 'season es obligatorio' }); return; }
-  const locked = await isSeasonLocked(season);
-  res.json({ locked });
+  const [locked, vueltaStarted] = await Promise.all([isSeasonLocked(season), isVueltaStarted(season)]);
+  res.json({ locked, vueltaStarted });
 });
 
 app.use('/api/auth', authRoutes);
