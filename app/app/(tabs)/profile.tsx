@@ -100,28 +100,28 @@ export default function ProfileScreen() {
   const { data: pichichi } = useQuery({
     queryKey: ['my-award-prediction', season, 'pichichi'],
     queryFn: () => awardPredictionsApi.get(season, 'pichichi'),
-    enabled: isSeasonLocked && hasPichichi,
+    enabled: hasPichichi && !!season,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: zamora } = useQuery({
     queryKey: ['my-award-prediction', season, 'zamora'],
     queryFn: () => awardPredictionsApi.get(season, 'zamora'),
-    enabled: isSeasonLocked && hasZamora,
+    enabled: hasZamora && !!season,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: idaPrediction } = useQuery({
     queryKey: ['standings-prediction', season, 'ida'],
     queryFn: () => standingsPredictionsApi.get(season, 'ida'),
-    enabled: isSeasonLocked && hasStandings,
+    enabled: hasStandings && !!season,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: vueltaPrediction } = useQuery({
     queryKey: ['standings-prediction', season, 'vuelta'],
     queryFn: () => standingsPredictionsApi.get(season, 'vuelta'),
-    enabled: isVueltaStarted && hasStandings,
+    enabled: hasStandings && !!season,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -132,8 +132,7 @@ export default function ProfileScreen() {
     return { points: ranking[pos].points, exactScores: ranking[pos].exactScores, position: pos + 1, total: ranking.length };
   }, [ranking, user]);
 
-  const showBetsSection = isSeasonLocked && group &&
-    (hasPichichi || hasZamora || (hasStandings && (idaPrediction || (isVueltaStarted && vueltaPrediction))));
+  const showBetsSection = !!group && (hasPichichi || hasZamora || hasStandings);
 
   async function handleLogout() {
     await logout();
@@ -212,7 +211,7 @@ export default function ProfileScreen() {
             )}
 
             {/* Clasificación Vuelta */}
-            {hasStandings && isVueltaStarted && vueltaPrediction && (
+            {hasStandings && vueltaPrediction && (
               <StandingsCard prediction={vueltaPrediction} phase="vuelta" />
             )}
           </View>
