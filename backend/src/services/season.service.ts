@@ -15,3 +15,12 @@ export async function isSeasonLocked(season: string): Promise<boolean> {
   if (!kickoff) return false;
   return new Date() >= kickoff;
 }
+
+// Vuelta = primer partido de jornada 19.
+export async function isVueltaStarted(season: string): Promise<boolean> {
+  const firstJ19 = await Match.findOne(
+    { season, competition: 'la_liga', matchday: 19 }
+  ).sort({ startTime: 1 });
+  if (!firstJ19) return false;
+  return new Date() >= firstJ19.startTime;
+}
