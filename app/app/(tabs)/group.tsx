@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FlatList, StyleSheet, View } from 'react-native';
 import {
-  ActivityIndicator, Avatar, Button, Chip, IconButton,
-  List, Surface, Text,
+  ActivityIndicator, Avatar, Button, Chip, Divider, IconButton,
+  List, Surface, Text, TextInput, useTheme,
 } from 'react-native-paper';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 
 import { rankingApi, RankingEntry } from '@/api/ranking';
@@ -80,22 +80,50 @@ function PremiosSection({
   groupId: string; season: string; isSeasonLocked: boolean;
   hasPichichi: boolean; hasZamora: boolean;
 }) {
+  const theme = useTheme();
+  const qc = useQueryClient();
   const awards: Award[] = [
     ...(hasPichichi ? ['pichichi' as Award] : []),
     ...(hasZamora ? ['zamora' as Award] : []),
   ];
   const [activeAward, setActiveAward] = useState<Award>(awards[0] ?? 'pichichi');
+  const [playerInput, setPlayerInput] = useState('');
+  const [saved, setSaved] = useState(false);
 
-  const { data: groupPredictions, isLoading } = useQuery({
+  // Mi predicción actual (siempre, para pre-rellenar el input)
+  const { data: myPrediction, isLoading: predLoading } = useQuery({
+    queryKey: ['my-award-prediction', season, activeAward],
+    queryFn: () => awardPredictionsApi.get(season, activeAward),
+    enabled: !!season,
+  });
+
+  // Goleadores (solo Pichichi, antes del kickoff como referencia)
+  const { data: scorers } = useQuery({
+    queryKey: ['scorers', season],
+    queryFn: () => awardPredictionsApi.listScorers(season),
+    enabled: !isSeasonLocked && activeAward === 'pichichi',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Apuestas del grupo (solo después del kickoff)
+  const { data: groupPredictions, isLoading: groupLoading } = useQuery({
     queryKey: ['group-award-predictions', groupId, season, activeAward],
     queryFn: () => awardPredictionsApi.getGroupPredictions(groupId, season, activeAward),
     enabled: isSeasonLocked && !!groupId,
   });
 
-  const { data: myPrediction } = useQuery({
-    queryKey: ['my-award-prediction', season, activeAward],
-    queryFn: () => awardPredictionsApi.get(season, activeAward),
-    enabled: !isSeasonLocked && !!season,
+  // Sincronizar input con la predicción cargada
+  useEffect(() => {
+    setPlayerInput(myPrediction?.predictedPlayer ?? '');
+    setSaved(false);
+  }, [myPrediction, activeAward]);
+
+  const { mutate: save, isPending: saving, error: saveError } = useMutation({
+    mutationFn: () => awardPredictionsApi.upsert(season, activeAward, playerInput.trim()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-award-prediction', season, activeAward] });
+      setSaved(true);
+    },
   });
 
   return (
@@ -104,12 +132,7 @@ function PremiosSection({
       {awards.length > 1 && (
         <View style={styles.subTabs}>
           {awards.map((a) => (
-            <Chip
-              key={a}
-              selected={activeAward === a}
-              onPress={() => setActiveAward(a)}
-              style={styles.chip}
-            >
+            <Chip key={a} selected={activeAward === a} onPress={() => setActiveAward(a)} style={styles.chip}>
               {a === 'pichichi' ? '⚽ Pichichi' : '🧤 Zamora'}
             </Chip>
           ))}
@@ -117,31 +140,70 @@ function PremiosSection({
       )}
 
       {!isSeasonLocked ? (
-        /* Temporada no empezada: mostrar mi predicción + botón de editar */
-        <View style={styles.premiosPreSeason}>
-          {myPrediction ? (
-            <Text variant="bodyLarge" style={styles.myPredText}>
-              Tu apuesta: <Text style={styles.myPredPlayer}>{myPrediction.predictedPlayer}</Text>
-            </Text>
-          ) : (
-            <Text variant="bodyMedium" style={styles.noPredText}>
-              Aún no has apostado por {activeAward === 'pichichi' ? 'el Pichichi' : 'el Zamora'}
-            </Text>
-          )}
-          <Button
-            mode="contained-tonal"
-            icon={activeAward === 'pichichi' ? 'soccer' : 'shield'}
-            onPress={() => router.push({
-              pathname: '/award-prediction/[season]' as never,
-              params: { season, groupId, initialAward: activeAward },
-            })}
-          >
-            {myPrediction ? 'Cambiar apuesta' : 'Apostar'}
-          </Button>
-        </View>
+        /* ── Antes del kickoff: formulario de edición inline ── */
+        predLoading ? (
+          <ActivityIndicator style={{ marginTop: 16 }} />
+        ) : (
+          <View style={styles.premiosForm}>
+            <TextInput
+              label={activeAward === 'pichichi' ? 'Nombre del jugador' : 'Nombre del portero'}
+              value={playerInput}
+              onChangeText={(t) => { setPlayerInput(t); setSaved(false); }}
+              mode="outlined"
+              autoCorrect={false}
+            />
+            {!!saveError && (
+              <Text variant="labelSmall" style={{ color: theme.colors.error }}>
+                {(saveError as Error).message}
+              </Text>
+            )}
+            {saved && (
+              <Text variant="labelMedium" style={{ color: theme.colors.primary }}>
+                Predicción guardada
+              </Text>
+            )}
+            <Button
+              mode="contained"
+              onPress={() => save()}
+              loading={saving}
+              disabled={saving || playerInput.trim().length === 0}
+            >
+              Guardar predicción
+            </Button>
+
+            {/* Lista de goleadores como referencia (solo Pichichi) */}
+            {activeAward === 'pichichi' && !!scorers?.length && (
+              <>
+                <Divider style={{ marginVertical: 8 }} />
+                <Text variant="labelMedium" style={{ opacity: 0.6 }}>Goleadores actuales</Text>
+                {scorers.map((s, i) => (
+                  <List.Item
+                    key={s._id}
+                    title={s.playerName}
+                    description={`${s.team} · ${s.goals} goles`}
+                    left={() => (
+                      <Text variant="bodyMedium" style={styles.scorerPos}>{i + 1}</Text>
+                    )}
+                    right={() => (
+                      <Button compact mode="text" onPress={() => { setPlayerInput(s.playerName); setSaved(false); }}>
+                        Elegir
+                      </Button>
+                    )}
+                  />
+                ))}
+              </>
+            )}
+
+            {activeAward === 'zamora' && (
+              <Text variant="bodySmall" style={styles.zamoraNote}>
+                La clasificación del Zamora no está disponible en la API gratuita. Introduce el nombre del portero que crees que recibirá menos goles.
+              </Text>
+            )}
+          </View>
+        )
       ) : (
-        /* Temporada empezada: lista de apuestas de todos los miembros */
-        isLoading ? (
+        /* ── Después del kickoff: lista de apuestas de todos ── */
+        groupLoading ? (
           <ActivityIndicator style={{ marginTop: 16 }} />
         ) : !groupPredictions?.length ? (
           <Text style={styles.emptyText}>
@@ -452,10 +514,9 @@ const styles = StyleSheet.create({
 
   // Premios
   premiosContainer: { gap: 12 },
-  premiosPreSeason: { gap: 12, alignItems: 'flex-start' },
-  myPredText: { opacity: 0.8 },
-  myPredPlayer: { fontWeight: '700', opacity: 1 },
-  noPredText: { opacity: 0.5, fontStyle: 'italic' },
+  premiosForm: { gap: 10 },
+  scorerPos: { width: 28, textAlign: 'center', alignSelf: 'center', opacity: 0.6 },
+  zamoraNote: { opacity: 0.5, fontStyle: 'italic' },
   predList: { gap: 8 },
   predRow: {
     flexDirection: 'row', alignItems: 'center',
