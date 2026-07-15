@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { AwardPrediction } from '../models/AwardPrediction';
 import { AppError } from '../utils/AppError';
 import { isSeasonLocked } from '../services/season.service';
+import { requireGroupMember } from '../services/groupAuth.service';
+import { Group } from '../models/Group';
 
 export async function upsertAwardPrediction(req: Request, res: Response): Promise<void> {
   const { season, award, predictedPlayer } = req.body as {
@@ -47,4 +49,22 @@ export async function getAwardPrediction(req: Request, res: Response): Promise<v
 
   const prediction = await AwardPrediction.findOne({ user: req.user!.id, season, award });
   res.json({ prediction: prediction ?? null });
+}
+
+export async function getGroupAwardPredictions(req: Request, res: Response): Promise<void> {
+  const groupId = String(req.params.groupId);
+  const { season, award } = req.query as { season?: string; award?: string };
+
+  if (!season) throw new AppError('season es obligatorio', 400);
+  if (award && award !== 'pichichi' && award !== 'zamora') {
+    throw new AppError('award debe ser "pichichi" o "zamora"', 400);
+  }
+
+  const group = await requireGroupMember(groupId, req.user!.id);
+
+  const filter: Record<string, unknown> = { user: { $in: group.members }, season };
+  if (award) filter.award = award;
+
+  const predictions = await AwardPrediction.find(filter).populate('user', 'alias email');
+  res.json({ predictions });
 }
