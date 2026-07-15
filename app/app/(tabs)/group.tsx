@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator, Avatar, Button, Chip, Divider, IconButton,
   List, Surface, Text, TextInput, useTheme,
@@ -21,53 +21,59 @@ const MEDAL_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
 
 // ─── Ranking rows ────────────────────────────────────────────────────────────
 
-function SeasonRow({ entry, position, isMe, debt }: {
-  entry: RankingEntry; position: number; isMe: boolean; debt: number;
+function SeasonRow({ entry, position, isMe, debt, total, onPress }: {
+  entry: RankingEntry; position: number; isMe: boolean; debt: number; total: number;
+  onPress: () => void;
 }) {
   const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
   return (
-    <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
-      <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
-        <Text variant="titleMedium" style={styles.posText}>{position}</Text>
-      </View>
-      <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
-      <View style={styles.userInfo}>
-        <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]}>
-          {entry.user.alias}{isMe ? '  (tú)' : ''}
-        </Text>
-        {entry.exactScores > 0 && (
-          <Text variant="labelSmall" style={styles.exactLabel}>
-            {entry.exactScores} exacto{entry.exactScores !== 1 ? 's' : ''}
+    <Pressable onPress={onPress} android_ripple={{ color: '#0001' }}>
+      <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
+        <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
+          <Text variant="titleMedium" style={styles.posText}>{position}</Text>
+        </View>
+        <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
+        <View style={styles.userInfo}>
+          <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]}>
+            {entry.user.alias}{isMe ? '  (tú)' : ''}
           </Text>
-        )}
-      </View>
-      <View style={styles.rightCol}>
-        <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
-          {entry.points} pts
-        </Text>
-        {debt > 0 && <Text variant="labelSmall" style={styles.debt}>💸 {debt}€</Text>}
-      </View>
-    </Surface>
+          {entry.exactScores > 0 && (
+            <Text variant="labelSmall" style={styles.exactLabel}>
+              {entry.exactScores} exacto{entry.exactScores !== 1 ? 's' : ''}
+            </Text>
+          )}
+        </View>
+        <View style={styles.rightCol}>
+          <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
+            {entry.points} pts
+          </Text>
+          {debt > 0 && <Text variant="labelSmall" style={styles.debt}>💸 {debt}€</Text>}
+        </View>
+      </Surface>
+    </Pressable>
   );
 }
 
-function MatchdayRow({ entry, position, isMe }: {
-  entry: MatchdayRankingEntry; position: number; isMe: boolean;
+function MatchdayRow({ entry, position, isMe, total, onPress }: {
+  entry: MatchdayRankingEntry; position: number; isMe: boolean; total: number;
+  onPress: () => void;
 }) {
   const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
   return (
-    <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
-      <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
-        <Text variant="titleMedium" style={styles.posText}>{position}</Text>
-      </View>
-      <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
-      <Text variant="bodyLarge" style={[styles.alias, styles.userInfo, isMe && styles.aliasMe]}>
-        {entry.user.alias}{isMe ? '  (tú)' : ''}
-      </Text>
-      <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
-        {entry.points} pts
-      </Text>
-    </Surface>
+    <Pressable onPress={onPress} android_ripple={{ color: '#0001' }}>
+      <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
+        <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
+          <Text variant="titleMedium" style={styles.posText}>{position}</Text>
+        </View>
+        <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
+        <Text variant="bodyLarge" style={[styles.alias, styles.userInfo, isMe && styles.aliasMe]}>
+          {entry.user.alias}{isMe ? '  (tú)' : ''}
+        </Text>
+        <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
+          {entry.points} pts
+        </Text>
+      </Surface>
+    </Pressable>
   );
 }
 
@@ -424,22 +430,40 @@ export default function GroupTab() {
         data={mainTab === 'ranking' && !rankingIsLoading ? rankingData : []}
         keyExtractor={(e) => e.user.id}
         ListHeaderComponent={ListHeader}
-        renderItem={({ item, index }) =>
-          rankingView === 'season' ? (
+        renderItem={({ item, index }) => {
+          const total = rankingData.length;
+          const goToProfile = () => router.push({
+            pathname: '/user/[userId]' as never,
+            params: {
+              userId: item.user.id,
+              alias: item.user.alias,
+              points: String(item.points),
+              exactScores: String((item as RankingEntry).exactScores ?? 0),
+              position: String(index + 1),
+              total: String(total),
+              groupId,
+              season,
+            },
+          });
+          return rankingView === 'season' ? (
             <SeasonRow
               entry={item as RankingEntry}
               position={index + 1}
               isMe={item.user.id === user?.id}
               debt={debtMap.get(item.user.id) ?? 0}
+              total={total}
+              onPress={goToProfile}
             />
           ) : (
             <MatchdayRow
               entry={item as MatchdayRankingEntry}
               position={index + 1}
               isMe={item.user.id === user?.id}
+              total={total}
+              onPress={goToProfile}
             />
-          )
-        }
+          );
+        }}
         ListEmptyComponent={
           mainTab === 'ranking' && !rankingIsLoading ? (
             <Text style={styles.emptyText}>Sin datos para esta jornada todavía.</Text>
