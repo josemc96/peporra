@@ -266,9 +266,10 @@ export default function GroupTab() {
 
   const isSeasonLocked = useMemo(() => {
     if (!matches?.length) return false;
-    const laLiga = matches.filter((m) => m.competition === 'la_liga');
-    if (!laLiga.length) return false;
-    const kickoff = Math.min(...laLiga.map((m) => new Date(m.startTime).getTime()));
+    // Igual que el backend: solo partidos pending de La Liga (los finished del seed no cuentan)
+    const pending = matches.filter((m) => m.competition === 'la_liga' && m.status === 'pending');
+    if (!pending.length) return false;
+    const kickoff = Math.min(...pending.map((m) => new Date(m.startTime).getTime()));
     return Date.now() >= kickoff;
   }, [matches]);
 
