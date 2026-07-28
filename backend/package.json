@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "seed:rules": "tsx src/scripts/seedRules.ts",
     "seed:mock-cards": "tsx src/scripts/seedMockCards.ts",
-    "finish:mock-cards": "tsx src/scripts/finishMockCards.ts"
+    "finish:mock-cards": "tsx src/scripts/finishMockCards.ts",
+    "seed:past-season": "tsx src/scripts/seedPastSeason.ts"
   },
   "keywords": [],
   "author": "",

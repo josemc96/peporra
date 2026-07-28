@@ -1,5 +1,6 @@
+import { useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Card, FAB, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Card, FAB, SegmentedButtons, Text } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
@@ -16,11 +17,26 @@ function GroupCard({ group, onSelect }: { group: GroupSummary; onSelect: () => v
 
 export default function GroupsScreen() {
   const { selectGroup } = useCurrentGroup();
+  const [tab, setTab] = useState<'activas' | 'historial'>('activas');
 
   const { data: groups, isLoading, isError, refetch } = useQuery({
     queryKey: ['groups'],
     queryFn: groupsApi.list,
   });
+
+  // Temporada más reciente = "activa"; el resto = historial
+  const { currentSeason, activeGroups, pastGroups } = useMemo(() => {
+    if (!groups?.length) return { currentSeason: '', activeGroups: [], pastGroups: [] };
+    const currentSeason = groups.reduce((max, g) => (g.season > max ? g.season : max), '');
+    return {
+      currentSeason,
+      activeGroups: groups.filter((g) => g.season === currentSeason),
+      pastGroups:   groups.filter((g) => g.season !== currentSeason),
+    };
+  }, [groups]);
+
+  const hasPast = pastGroups.length > 0;
+  const displayedGroups = tab === 'activas' ? activeGroups : pastGroups;
 
   async function handleSelect(g: GroupSummary) {
     await selectGroup({ id: g._id, season: g.season, name: g.name });
@@ -28,11 +44,7 @@ export default function GroupsScreen() {
   }
 
   if (isLoading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
+    return <View style={styles.centered}><ActivityIndicator size="large" /></View>;
   }
 
   if (isError) {
@@ -59,8 +71,22 @@ export default function GroupsScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Tabs solo si hay peñas de temporadas anteriores */}
+      {hasPast && (
+        <View style={styles.tabsWrapper}>
+          <SegmentedButtons
+            value={tab}
+            onValueChange={(v) => setTab(v as 'activas' | 'historial')}
+            buttons={[
+              { value: 'activas',   label: 'Esta temporada' },
+              { value: 'historial', label: 'Temporadas pasadas' },
+            ]}
+          />
+        </View>
+      )}
+
       <FlatList
-        data={groups}
+        data={displayedGroups}
         keyExtractor={(g) => g._id}
         renderItem={({ item }) => (
           <GroupCard group={item} onSelect={() => handleSelect(item)} />
@@ -68,23 +94,33 @@ export default function GroupsScreen() {
         contentContainerStyle={styles.list}
         onRefresh={refetch}
         refreshing={isLoading}
+        ListEmptyComponent={
+          <View style={styles.centered}>
+            <Text style={styles.emptySubtitle}>
+              {tab === 'activas' ? 'No hay peñas activas.' : 'No hay peñas de temporadas anteriores.'}
+            </Text>
+          </View>
+        }
       />
 
-      <View style={styles.fabs}>
-        <FAB
-          icon="account-plus"
-          label="Unirse"
-          size="small"
-          style={styles.fabSecondary}
-          onPress={() => router.push('/groups/join')}
-        />
-        <FAB
-          icon="plus"
-          label="Nueva peña"
-          style={styles.fabPrimary}
-          onPress={() => router.push('/groups/create')}
-        />
-      </View>
+      {/* FABs solo en "Esta temporada" */}
+      {tab === 'activas' && (
+        <View style={styles.fabs}>
+          <FAB
+            icon="account-plus"
+            label="Unirse"
+            size="small"
+            style={styles.fabSecondary}
+            onPress={() => router.push('/groups/join')}
+          />
+          <FAB
+            icon="plus"
+            label="Nueva peña"
+            style={styles.fabPrimary}
+            onPress={() => router.push('/groups/create')}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -92,13 +128,22 @@ export default function GroupsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
+
+  tabsWrapper: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+
   list: { padding: 16, gap: 12, paddingBottom: 100 },
   card: { width: '100%' },
+
   errorText: { color: '#9C3B2C' },
   retryButton: { marginTop: 8 },
   emptyTitle: { textAlign: 'center' },
   emptySubtitle: { textAlign: 'center', opacity: 0.6 },
   emptyActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
+
   fabs: { position: 'absolute', bottom: 16, right: 16, gap: 8, alignItems: 'flex-end' },
   fabPrimary: {},
   fabSecondary: {},
