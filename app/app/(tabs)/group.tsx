@@ -315,7 +315,6 @@ export default function GroupTab() {
   const hasPichichi = feats.includes('pichichi');
   const hasZamora = feats.includes('zamora');
   const hasPremios = hasPichichi || hasZamora;
-  const hasKnockout = comps.includes('copa_del_rey') || comps.includes('supercopa');
   const isGroupAdmin = user?.id === groupDetail?.admin._id;
 
   const rankingIsLoading = rankingView === 'season' ? loadingSeason : loadingMatchday;
@@ -346,24 +345,14 @@ export default function GroupTab() {
       </Surface>
 
       {/* Accesos rápidos */}
-      {(hasStandings || hasKnockout) && (
+      {hasStandings && (
         <View style={styles.quickLinks}>
-          {hasStandings && (
-            <Button
-              mode="outlined" compact icon="table" style={styles.quickBtn}
-              onPress={() => router.push({ pathname: '/standings-prediction/[season]' as never, params: { season } })}
-            >
-              Clasificación
-            </Button>
-          )}
-          {hasKnockout && (
-            <Button
-              mode="outlined" compact icon="trophy-outline" style={styles.quickBtn}
-              onPress={() => router.push({ pathname: '/knockout/[season]' as never, params: { season } })}
-            >
-              Copa / SC
-            </Button>
-          )}
+          <Button
+            mode="outlined" compact icon="table" style={styles.quickBtn}
+            onPress={() => router.push({ pathname: '/standings-prediction/[season]' as never, params: { season } })}
+          >
+            Clasificación
+          </Button>
         </View>
       )}
 
