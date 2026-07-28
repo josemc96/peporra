@@ -274,7 +274,7 @@ export default function GroupTab() {
   const { data: seasonRanking, isLoading: loadingSeason } = useQuery({
     queryKey: ['ranking', groupId, season],
     queryFn: () => rankingApi.get(groupId, season),
-    enabled: !!groupId && rankingView === 'season' && mainTab === 'ranking',
+    enabled: !!groupId && mainTab === 'ranking',
   });
 
   const { data: debt } = useQuery({
@@ -432,15 +432,17 @@ export default function GroupTab() {
         ListHeaderComponent={ListHeader}
         renderItem={({ item, index }) => {
           const total = rankingData.length;
+          const globalEntry = seasonRanking?.find((e) => e.user.id === item.user.id);
+          const globalPos = seasonRanking ? (seasonRanking.findIndex((e) => e.user.id === item.user.id) + 1) : 0;
           const goToProfile = () => router.push({
             pathname: '/user/[userId]' as never,
             params: {
               userId: item.user.id,
               alias: item.user.alias,
-              points: String(item.points),
-              exactScores: String((item as RankingEntry).exactScores ?? 0),
-              position: String(index + 1),
-              total: String(total),
+              points: String(globalEntry?.points ?? 0),
+              exactScores: String(globalEntry?.exactScores ?? 0),
+              position: String(globalPos),
+              total: String(seasonRanking?.length ?? total),
               groupId,
               season,
             },
