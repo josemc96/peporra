@@ -39,7 +39,7 @@ export const CARD_DESCRIPTIONS: Record<CardKey, string> = {
   la_mina: 'Quienes coincidan con tu resultado ese partido puntúan 0.',
   la_roja: 'Un rival pierde sus puntos en un partido.',
   la_lesion: 'Un rival obtiene la mitad de puntos en un partido.',
-  el_var: 'Modifica tu predicción de un partido ya iniciado (±1 al marcador).',
+  el_var: 'Si fallas el resultado exacto por un solo gol en un lado (y el otro lo aciertas), cuenta como resultado exacto.',
   el_autobus: 'Quedas inmune en un partido y tienes mínimo 1 punto.',
   el_espia: 'Consulta la predicción de un rival antes del partido.',
   rueda_prensa: 'Convocas a un rival: su predicción en un partido se hace pública para toda la peña, y si la cambia también se ve.',
@@ -74,7 +74,7 @@ export interface CardPlay {
   deal: string;
   targetUser?: string;
   targetMatch?: string;
-  params: { side?: 'home' | 'away'; delta?: number; amount?: number; copiedUserId?: string };
+  params: { amount?: number; copiedUserId?: string };
   playedAt: string;
 }
 
@@ -83,7 +83,7 @@ export interface ActiveCardPlay {
   deal: { _id: string; card: CardKey; user: { _id: string; alias: string } };
   targetUser?: { _id: string; alias: string };
   targetMatch?: { _id: string; homeTeam: string; awayTeam: string; startTime: string; matchday: number };
-  params: { side?: 'home' | 'away'; delta?: number; amount?: number; copiedUserId?: string };
+  params: { amount?: number; copiedUserId?: string };
   playedAt: string;
 }
 

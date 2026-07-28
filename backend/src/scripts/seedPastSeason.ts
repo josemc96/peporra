@@ -47,7 +47,7 @@ import { ALL_CARD_KEYS, CardKey } from '../types/enums';
 
 // ── Constantes ───────────────────────────────────────────────────────────────
 
-const REAL_USER_EMAIL = 'morcillopepe1@gmail.com';
+const REAL_USER_EMAIL = 'pepe@pepe.com';
 const SEASON = '2025-2026';
 const GROUP_NAME = 'Peña 2025-26';
 const PASSWORD = 'test1234';

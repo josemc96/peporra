@@ -1,13 +1,10 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
 // params varía según la carta:
-// el_var:      { side: 'home'|'away', delta: 1|-1 }
 // me_la_juego: { amount: number }
 // el_espia:    { copiedUserId?: string }
 // resto:       {}
 export interface ICardPlayParams {
-  side?: 'home' | 'away';
-  delta?: 1 | -1;
   amount?: number;
   copiedUserId?: string;
 }

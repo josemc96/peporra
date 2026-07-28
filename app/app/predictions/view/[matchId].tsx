@@ -45,7 +45,7 @@ function cardPlayDescription(play: ActiveCardPlay): string {
   const card = play.deal.card as CardKey;
   const owner = play.deal.user.alias;
   const target = play.targetUser?.alias;
-  const { side, delta, amount } = play.params ?? {};
+  const { amount } = play.params ?? {};
 
   switch (card) {
     case 'la_mina':     return `${owner} plantó la mina — quien tenga el mismo resultado puntúa 0`;
@@ -53,11 +53,7 @@ function cardPlayDescription(play: ActiveCardPlay): string {
     case 'la_lesion':   return `${owner} lesionó a ${target ?? '?'} — la mitad de sus puntos`;
     case 'el_doblete':  return `${owner} activó el doblete — sus puntos base se duplican`;
     case 'el_autobus':  return `${owner} subió al autobús — inmune y garantiza mínimo 1 pt`;
-    case 'el_var': {
-      const sideLabel = side === 'home' ? 'local' : 'visitante';
-      const deltaStr  = delta === 1 ? '+1' : '-1';
-      return `${owner} usó el VAR en ${target ?? '?'}: gol ${sideLabel} ${deltaStr}`;
-    }
+    case 'el_var':      return `${owner} activó el VAR — un gol de diferencia en un lado cuenta como exacto`;
     case 'rueda_prensa': return `${owner} convocó rueda de prensa de ${target ?? '?'} — su predicción es visible para toda la peña`;
     case 'me_la_juego':  return `${owner} apostó ${amount ?? '?'} pts — gana si acierta resultado exacto`;
     case 'el_espia':     return `${owner} espió las predicciones de este partido`;

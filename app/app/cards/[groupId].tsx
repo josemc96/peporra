@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
-  Chip,
   Divider,
   List,
   Surface,
@@ -21,11 +20,11 @@ import { ApiError } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 
 // Cards that need the user to pick a match (same matchday, before kickoff)
-const NEEDS_MATCH: CardKey[] = ['la_mina', 'el_autobus', 'el_doblete', 'la_roja', 'la_lesion', 'rueda_prensa', 'me_la_juego', 'el_espia'];
+const NEEDS_MATCH: CardKey[] = ['la_mina', 'el_autobus', 'el_doblete', 'la_roja', 'la_lesion', 'rueda_prensa', 'me_la_juego', 'el_espia', 'el_var'];
 // Cards that need a rival picked
-const NEEDS_RIVAL: CardKey[] = ['la_roja', 'la_lesion', 'rueda_prensa', 'la_aficion', 'el_var'];
-// Cards that need a finished match (el_var only)
-const NEEDS_FINISHED_MATCH: CardKey[] = ['el_var'];
+const NEEDS_RIVAL: CardKey[] = ['la_roja', 'la_lesion', 'rueda_prensa', 'la_aficion'];
+// Cards that need a finished match
+const NEEDS_FINISHED_MATCH: CardKey[] = [];
 
 // ── Match picker list ───────────────────────────────────────────────────────
 
@@ -99,8 +98,6 @@ export default function CardPlayScreen() {
   // Inputs
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [selectedRivalId, setSelectedRivalId] = useState<string | null>(null);
-  const [varSide, setVarSide] = useState<'home' | 'away'>('home');
-  const [varDelta, setVarDelta] = useState<1 | -1>(1);
   const [betAmount, setBetAmount] = useState('');
   const [ruedaAmount, setRuedaAmount] = useState('');
   const [spyCopiedId, setSpyCopiedId] = useState<string | null>(null);
@@ -164,7 +161,6 @@ export default function CardPlayScreen() {
       if (selectedMatchId) body.matchId = selectedMatchId;
       if (selectedRivalId) body.targetUserId = selectedRivalId;
 
-      if (card === 'el_var') body.params = { side: varSide, delta: varDelta };
       if (card === 'me_la_juego') body.params = { amount: parseInt(betAmount, 10) };
       if (card === 'rueda_prensa') body.params = { amount: parseInt(ruedaAmount, 10) };
       if (card === 'el_espia' && spyCopiedId) body.params = { copiedUserId: spyCopiedId };
@@ -187,7 +183,7 @@ export default function CardPlayScreen() {
     if (!card || !deal || deal.status !== 'pending') return false;
     if (needsMatch && !selectedMatchId) return false;
     if (needsRival && !selectedRivalId) return false;
-    if (card === 'el_var') return !!selectedMatchId && !!selectedRivalId;
+    if (card === 'el_var') return !!selectedMatchId;
     if (card === 'me_la_juego') {
       const n = parseInt(betAmount, 10);
       return !!selectedMatchId && !isNaN(n) && n >= 1 && n <= melaLimit;
@@ -203,7 +199,6 @@ export default function CardPlayScreen() {
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const selectedMatch = availableMatches.find((m) => m._id === selectedMatchId);
-  const selectedRival = groupData?.members.find((m) => m._id === selectedRivalId);
 
   if (dealLoading) {
     return (
@@ -304,27 +299,6 @@ export default function CardPlayScreen() {
                   selectedId={selectedMatchId}
                   onSelect={(id) => { setSelectedMatchId(id); setSpyCopiedId(null); }}
                 />
-              )}
-              <Divider style={styles.divider} />
-            </>
-          )}
-
-          {/* el_var: side + delta */}
-          {card === 'el_var' && selectedMatchId && selectedRivalId && (
-            <>
-              <Text variant="titleSmall" style={styles.sectionTitle}>Ajuste del VAR</Text>
-              <View style={styles.chipRow}>
-                <Chip selected={varSide === 'home'} onPress={() => setVarSide('home')} style={{ flex: 1 }}>Local</Chip>
-                <Chip selected={varSide === 'away'} onPress={() => setVarSide('away')} style={{ flex: 1 }}>Visitante</Chip>
-              </View>
-              <View style={styles.chipRow}>
-                <Chip selected={varDelta === 1} onPress={() => setVarDelta(1)} style={{ flex: 1 }}>+1 gol</Chip>
-                <Chip selected={varDelta === -1} onPress={() => setVarDelta(-1)} style={{ flex: 1 }}>-1 gol</Chip>
-              </View>
-              {selectedMatch && (
-                <Text variant="bodySmall" style={{ opacity: 0.6, marginTop: 4 }}>
-                  Modificarás la predicción de {selectedRival?.alias ?? '?'} en {selectedMatch.homeTeam} vs {selectedMatch.awayTeam}
-                </Text>
               )}
               <Divider style={styles.divider} />
             </>
@@ -447,6 +421,5 @@ const styles = StyleSheet.create({
   sectionTitle: { fontWeight: '600', marginTop: 4 },
   divider: { marginVertical: 8 },
   pickerBox: { borderWidth: StyleSheet.hairlineWidth, borderColor: '#ccc', borderRadius: 8, overflow: 'hidden' },
-  chipRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   playBtn: { marginTop: 8 },
 });

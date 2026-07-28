@@ -91,33 +91,13 @@ async function validatePlay(
       return { targetUserId, targetMatchId: matchId, params: {} };
     }
 
-    // ── El VAR: rival + finished match + side + delta ───────────────────
+    // ── El VAR: self-buff before kickoff — ±1 miss on one side counts as exact ──
     case 'el_var': {
       if (!matchId) throw new AppError('matchId es obligatorio', 400);
-      if (!targetUserId) throw new AppError('targetUserId es obligatorio', 400);
-      assertNotSelf(userId, targetUserId);
-      assertIsMember(group, targetUserId);
-      const { side, delta } = params as { side?: string; delta?: number };
-      if (side !== 'home' && side !== 'away') throw new AppError('side debe ser "home" o "away"', 400);
-      if (delta !== 1 && delta !== -1) throw new AppError('delta debe ser 1 o -1', 400);
       const match = await resolveMatch(matchId);
-      assertFinished(match);
-      // Check rival has a prediction for this match
-      const pred = await Prediction.findOne({ user: targetUserId, match: matchId });
-      if (!pred) throw new AppError('El rival no tiene predicción en este partido', 404);
-      // Apply the VAR change to the stored prediction
-      if (side === 'home') {
-        const newVal = pred.predictedHome + delta;
-        if (newVal < 0) throw new AppError('El marcador no puede ser negativo', 400);
-        pred.predictedHome = newVal;
-      } else {
-        const newVal = pred.predictedAway + delta;
-        if (newVal < 0) throw new AppError('El marcador no puede ser negativo', 400);
-        pred.predictedAway = newVal;
-      }
-      pred.status = 'pending'; // reset so scoring re-runs
-      await pred.save();
-      return { targetUserId, targetMatchId: matchId, params: { side: side as 'home' | 'away', delta: delta as 1 | -1 } };
+      assertBeforeKickoff(match);
+      if (match.matchday !== deal.matchday) throw new AppError('El partido no pertenece a la jornada de la carta', 400);
+      return { targetMatchId: matchId, params: {} };
     }
 
     // ── El Espía: spy window (-30 min before kickoff) ───────────────────
