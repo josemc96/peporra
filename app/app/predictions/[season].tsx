@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Card, Chip, IconButton, Text } from 'react-native-paper';
+import {
+  ActivityIndicator, Button, Card, Chip, IconButton,
+  SegmentedButtons, Text,
+} from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { predictionsApi, Match, Prediction } from '@/api/predictions';
 import { adminGroupApi, ScoreMultiplier } from '@/api/adminGroup';
 import { cardsApi, CARD_LABELS, CARD_EMOJI } from '@/api/cards';
+
+type Competition = 'la_liga' | 'copa_del_rey' | 'supercopa';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -15,10 +20,7 @@ function formatDateTime(iso: string): string {
   });
 }
 
-function resolveMultiplier(
-  match: Match,
-  multipliers: ScoreMultiplier[]
-): number | null {
+function resolveMultiplier(match: Match, multipliers: ScoreMultiplier[]): number | null {
   const matchMult = multipliers.find((m) => m.scope === 'match' && m.match === match._id);
   if (matchMult) return matchMult.multiplier;
   if (match.matchday != null) {
@@ -60,14 +62,17 @@ function MatchCard({
   }
 
   function openView() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    router.push({ pathname: '/predictions/view/[matchId]' as any, params: {
-      matchId: match._id, groupId, season,
-      matchday: match.matchday != null ? String(match.matchday) : undefined,
-      homeTeam: match.homeTeam, awayTeam: match.awayTeam, startTime: match.startTime,
-      homeScore: match.homeScore != null ? String(match.homeScore) : undefined,
-      awayScore: match.awayScore != null ? String(match.awayScore) : undefined,
-    }});
+    router.push({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      pathname: '/predictions/view/[matchId]' as any,
+      params: {
+        matchId: match._id, groupId, season,
+        matchday: match.matchday != null ? String(match.matchday) : undefined,
+        homeTeam: match.homeTeam, awayTeam: match.awayTeam, startTime: match.startTime,
+        homeScore: match.homeScore != null ? String(match.homeScore) : undefined,
+        awayScore: match.awayScore != null ? String(match.awayScore) : undefined,
+      },
+    });
   }
 
   return (
@@ -125,6 +130,7 @@ function MatchCard({
 export default function PredictionsScreen() {
   const { season, groupId } = useLocalSearchParams<{ season: string; groupId?: string }>();
   const [selectedMatchday, setSelectedMatchday] = useState<number>(1);
+  const [competitionTab, setCompetitionTab] = useState<Competition>('la_liga');
 
   const { data: matches, isLoading: loadingMatches } = useQuery({
     queryKey: ['matches', season],
@@ -143,25 +149,41 @@ export default function PredictionsScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: settings } = useQuery({
+    queryKey: ['rule-settings', groupId, season],
+    queryFn: () => adminGroupApi.getRuleSettings(groupId!, season),
+    enabled: !!groupId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data: myDeal } = useQuery({
     queryKey: ['my-deal', groupId, season, selectedMatchday],
     queryFn: () => cardsApi.getMyDeal(groupId!, season, selectedMatchday),
-    enabled: !!groupId && selectedMatchday > 0,
+    enabled: !!groupId && selectedMatchday > 0 && competitionTab === 'la_liga',
   });
+
+  const enabledCompetitions = settings?.enabledCompetitions ?? [];
+  const hasCopaEnabled = enabledCompetitions.includes('copa_del_rey');
+  const hasSupercopaEnabled = enabledCompetitions.includes('supercopa');
+
+  const competitionTabs = useMemo(() => {
+    const tabs: { value: string; label: string }[] = [{ value: 'la_liga', label: 'La Liga' }];
+    if (hasCopaEnabled) tabs.push({ value: 'copa_del_rey', label: 'Copa del Rey' });
+    if (hasSupercopaEnabled) tabs.push({ value: 'supercopa', label: 'Supercopa' });
+    return tabs;
+  }, [hasCopaEnabled, hasSupercopaEnabled]);
 
   const matchdays = useMemo(() => {
     if (!matches) return [];
-    const days = [
+    return [
       ...new Set(
         matches
           .filter((m) => m.competition === 'la_liga' && m.matchday != null)
           .map((m) => m.matchday!)
       ),
     ].sort((a, b) => a - b);
-    return days;
   }, [matches]);
 
-  // Inicializa en la primera jornada con partidos pendientes
   useEffect(() => {
     if (!matches || matchdays.length === 0) return;
     const now = new Date();
@@ -177,10 +199,13 @@ export default function PredictionsScreen() {
     return map;
   }, [predictions]);
 
-  const filteredMatches = useMemo(
-    () => matches?.filter((m) => m.competition === 'la_liga' && m.matchday === selectedMatchday) ?? [],
-    [matches, selectedMatchday]
-  );
+  const filteredMatches = useMemo(() => {
+    if (!matches) return [];
+    if (competitionTab === 'la_liga') {
+      return matches.filter((m) => m.competition === 'la_liga' && m.matchday === selectedMatchday);
+    }
+    return matches.filter((m) => m.competition === competitionTab);
+  }, [matches, competitionTab, selectedMatchday]);
 
   const isLoading = loadingMatches || loadingPredictions;
 
@@ -196,28 +221,41 @@ export default function PredictionsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Navegación de jornada */}
-      <View style={styles.matchdayNav}>
-        <IconButton
-          icon="chevron-left"
-          size={28}
-          onPress={() => setSelectedMatchday(matchdays[currentIdx - 1])}
-          disabled={currentIdx <= 0}
-        />
-        <Text variant="titleMedium" style={styles.matchdayLabel}>
-          Jornada {selectedMatchday}
-          <Text variant="bodySmall" style={styles.matchdayTotal}> / {matchdays.length}</Text>
-        </Text>
-        <IconButton
-          icon="chevron-right"
-          size={28}
-          onPress={() => setSelectedMatchday(matchdays[currentIdx + 1])}
-          disabled={currentIdx >= matchdays.length - 1}
-        />
-      </View>
+      {/* Tabs de competición (solo si hay más de una habilitada) */}
+      {competitionTabs.length > 1 && (
+        <View style={styles.competitionTabsWrapper}>
+          <SegmentedButtons
+            value={competitionTab}
+            onValueChange={(v) => setCompetitionTab(v as Competition)}
+            buttons={competitionTabs}
+          />
+        </View>
+      )}
 
-      {/* Banner carta de jornada */}
-      {groupId && myDeal?.deal && (
+      {/* Selector de jornada (solo La Liga) */}
+      {competitionTab === 'la_liga' && (
+        <View style={styles.matchdayNav}>
+          <IconButton
+            icon="chevron-left"
+            size={28}
+            onPress={() => setSelectedMatchday(matchdays[currentIdx - 1])}
+            disabled={currentIdx <= 0}
+          />
+          <Text variant="titleMedium" style={styles.matchdayLabel}>
+            Jornada {selectedMatchday}
+            <Text variant="bodySmall" style={styles.matchdayTotal}> / {matchdays.length}</Text>
+          </Text>
+          <IconButton
+            icon="chevron-right"
+            size={28}
+            onPress={() => setSelectedMatchday(matchdays[currentIdx + 1])}
+            disabled={currentIdx >= matchdays.length - 1}
+          />
+        </View>
+      )}
+
+      {/* Banner carta de jornada (solo La Liga) */}
+      {competitionTab === 'la_liga' && groupId && myDeal?.deal && (
         <Button
           mode={myDeal.deal.status === 'pending' ? 'contained-tonal' : 'text'}
           compact
@@ -247,20 +285,28 @@ export default function PredictionsScreen() {
           />
         )}
         contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {competitionTab === 'la_liga'
+              ? 'No hay partidos para esta jornada.'
+              : 'No hay partidos de esta competición todavía.'}
+          </Text>
+        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  competitionTabsWrapper: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+
   matchdayNav: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -269,90 +315,33 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#ccc',
   },
-  matchdayLabel: {
-    fontWeight: '600',
-  },
-  matchdayTotal: {
-    opacity: 0.4,
-    fontWeight: 'normal',
-  },
-  list: {
-    padding: 12,
-    gap: 10,
-    paddingBottom: 32,
-  },
-  matchCard: {
-    width: '100%',
-  },
-  cardContent: {
-    gap: 4,
-  },
-  teamsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  team: {
-    flex: 1,
-  },
-  teamRight: {
-    textAlign: 'right',
-  },
-  vs: {
-    opacity: 0.5,
-  },
-  scoreCenter: {
-    fontWeight: '700',
-    minWidth: 48,
-    textAlign: 'center',
-  },
-  predCenter: {
-    fontWeight: '600',
-    minWidth: 48,
-    textAlign: 'center',
-    opacity: 0.75,
-  },
-  liveIndicator: {
-    color: '#DC2626',
-    fontWeight: '700',
-    minWidth: 64,
-    textAlign: 'center',
-  },
-  predBtn: {
-    marginLeft: -8,
-  },
-  multChip: {
-    backgroundColor: '#F59E0B',
-    height: 24,
-  },
-  multText: {
-    color: '#1C1917',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  dateText: {
-    opacity: 0.5,
-    marginTop: 2,
-  },
-  result: {
-    marginTop: 4,
-  },
+  matchdayLabel: { fontWeight: '600' },
+  matchdayTotal: { opacity: 0.4, fontWeight: 'normal' },
+
+  cardBanner: { marginHorizontal: 8, marginVertical: 4 },
+
+  list: { padding: 12, gap: 10, paddingBottom: 32 },
+  emptyText: { textAlign: 'center', opacity: 0.5, marginTop: 40, fontStyle: 'italic' },
+
+  matchCard: { width: '100%' },
+  cardContent: { gap: 4 },
+  teamsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  team: { flex: 1 },
+  teamRight: { textAlign: 'right' },
+  vs: { opacity: 0.5 },
+  scoreCenter: { fontWeight: '700', minWidth: 48, textAlign: 'center' },
+  predCenter: { fontWeight: '600', minWidth: 48, textAlign: 'center', opacity: 0.75 },
+  liveIndicator: { color: '#DC2626', fontWeight: '700', minWidth: 64, textAlign: 'center' },
+  predBtn: { marginLeft: -8 },
+  multChip: { backgroundColor: '#F59E0B', height: 24 },
+  multText: { color: '#1C1917', fontWeight: '700', fontSize: 12 },
+  dateText: { opacity: 0.5, marginTop: 2 },
   predictionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 6,
   },
-  predictionText: {
-    color: '#1E6B45',
-    fontWeight: '600',
-  },
-  noPrediction: {
-    opacity: 0.4,
-    fontStyle: 'italic',
-  },
-  cardBanner: {
-    marginHorizontal: 8,
-    marginVertical: 4,
-  },
+  predictionText: { color: '#1E6B45', fontWeight: '600' },
+  noPrediction: { opacity: 0.4, fontStyle: 'italic' },
 });
