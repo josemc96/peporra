@@ -99,7 +99,6 @@ export default function CardPlayScreen() {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [selectedRivalId, setSelectedRivalId] = useState<string | null>(null);
   const [betAmount, setBetAmount] = useState('');
-  const [ruedaAmount, setRuedaAmount] = useState('');
   const [spyCopiedId, setSpyCopiedId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -162,7 +161,6 @@ export default function CardPlayScreen() {
       if (selectedRivalId) body.targetUserId = selectedRivalId;
 
       if (card === 'me_la_juego') body.params = { amount: parseInt(betAmount, 10) };
-      if (card === 'rueda_prensa') body.params = { amount: parseInt(ruedaAmount, 10) };
       if (card === 'el_espia' && spyCopiedId) body.params = { copiedUserId: spyCopiedId };
 
       return cardsApi.playCard(groupId, body);
@@ -188,10 +186,7 @@ export default function CardPlayScreen() {
       const n = parseInt(betAmount, 10);
       return !!selectedMatchId && !isNaN(n) && n >= 1 && n <= melaLimit;
     }
-    if (card === 'rueda_prensa') {
-      const n = parseInt(ruedaAmount, 10);
-      return !!selectedMatchId && !!selectedRivalId && !isNaN(n) && n >= 1;
-    }
+    if (card === 'rueda_prensa') return !!selectedMatchId && !!selectedRivalId;
     if (card === 'el_espia') return !!selectedMatchId;
     return true;
   }
@@ -321,22 +316,6 @@ export default function CardPlayScreen() {
             </>
           )}
 
-          {/* rueda_prensa: extra points */}
-          {card === 'rueda_prensa' && selectedMatchId && selectedRivalId && (
-            <>
-              <Text variant="titleSmall" style={styles.sectionTitle}>Puntos extra</Text>
-              <TextInput
-                label="Puntos a añadir"
-                value={ruedaAmount}
-                onChangeText={setRuedaAmount}
-                keyboardType="numeric"
-                mode="outlined"
-                dense
-                placeholder="ej. 3"
-              />
-              <Divider style={styles.divider} />
-            </>
-          )}
 
           {/* el_espia: spy button + results */}
           {card === 'el_espia' && selectedMatchId && (

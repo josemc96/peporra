@@ -138,7 +138,6 @@ async function applyMatchEffects(
     if (!score) continue;
 
     const preCard = score.preCardPoints;
-    const basePoints = score.ruleBreakdown.reduce((s, r) => s + r.points, 0);
     let finalPoints = preCard;
 
     if (effects.autobusUsers.has(userId)) {
@@ -163,8 +162,7 @@ async function applyMatchEffects(
       } else if (hitByLesion) {
         finalPoints = Math.floor(preCard / 2);
       } else if (hasDoble) {
-        // +1 to multiplier: add one extra "set of base points"
-        finalPoints = preCard + basePoints;
+        finalPoints = preCard * 2;
       }
     }
 
