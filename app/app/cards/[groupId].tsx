@@ -151,6 +151,21 @@ export default function CardPlayScreen() {
     onError: (e) => setErrorMsg(e instanceof ApiError ? e.message : 'Error al espiar'),
   });
 
+  // ── Unlock mutation ───────────────────────────────────────────────────────
+
+  const { mutate: unlock, isPending: unlocking } = useMutation({
+    mutationFn: () => {
+      if (!deal) throw new Error('Sin carta');
+      return cardsApi.unlockCard(groupId, deal._id);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-deal', groupId, season, matchday] });
+    },
+    onError: (e) => {
+      setErrorMsg(e instanceof ApiError ? e.message : 'Error al desbloquear la carta');
+    },
+  });
+
   // ── Play mutation ─────────────────────────────────────────────────────────
 
   const { mutate: playCard, isPending: playing } = useMutation({
@@ -210,7 +225,7 @@ export default function CardPlayScreen() {
           Sin carta en J{matchdayNum}
         </Text>
         <Text variant="bodySmall" style={{ opacity: 0.4, marginTop: 8, textAlign: 'center' }}>
-          Las cartas se reparten automáticamente 24h antes del primer partido de cada jornada.
+          Las cartas se reparten automáticamente antes de cada jornada.
         </Text>
       </View>
     );
@@ -220,22 +235,61 @@ export default function CardPlayScreen() {
     ? theme.colors.primary
     : deal.status === 'expired'
       ? theme.colors.onSurfaceDisabled
-      : theme.colors.onSurface;
+      : deal.status === 'locked'
+        ? theme.colors.secondary
+        : theme.colors.onSurface;
 
-  const statusLabel = deal.status === 'played' ? 'Jugada' : deal.status === 'expired' ? 'Expirada' : 'Sin jugar';
+  const statusLabel =
+    deal.status === 'played' ? 'Jugada'
+    : deal.status === 'expired' ? 'Expirada'
+    : deal.status === 'locked' ? 'Bloqueada'
+    : 'Sin jugar';
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
       {/* ── Card display ── */}
-      <Surface style={styles.cardSurface} elevation={3}>
-        <Text style={styles.cardEmoji}>{CARD_EMOJI[deal.card]}</Text>
-        <Text variant="headlineSmall" style={styles.cardName}>{CARD_LABELS[deal.card]}</Text>
-        <Text variant="bodyMedium" style={styles.cardDesc}>{CARD_DESCRIPTIONS[deal.card]}</Text>
-        <View style={styles.statusRow}>
-          <Text variant="labelMedium" style={{ color: statusColor }}>● {statusLabel}</Text>
-          <Text variant="labelSmall" style={{ opacity: 0.5 }}>J{matchdayNum}</Text>
-        </View>
-      </Surface>
+      {deal.status === 'locked' ? (
+        <Surface style={[styles.cardSurface, styles.lockedSurface]} elevation={3}>
+          <Text style={styles.cardEmoji}>🔒</Text>
+          <Text variant="headlineSmall" style={styles.cardName}>Carta bloqueada</Text>
+          <Text variant="bodyMedium" style={styles.cardDesc}>
+            Tienes una carta para la jornada {matchdayNum}. Desbloqueala para ver qué carta es y poder jugarla antes del último partido.
+          </Text>
+          <View style={styles.statusRow}>
+            <Text variant="labelMedium" style={{ color: statusColor }}>● {statusLabel}</Text>
+            <Text variant="labelSmall" style={{ opacity: 0.5 }}>J{matchdayNum}</Text>
+          </View>
+        </Surface>
+      ) : (
+        <Surface style={styles.cardSurface} elevation={3}>
+          <Text style={styles.cardEmoji}>{CARD_EMOJI[deal.card]}</Text>
+          <Text variant="headlineSmall" style={styles.cardName}>{CARD_LABELS[deal.card]}</Text>
+          <Text variant="bodyMedium" style={styles.cardDesc}>{CARD_DESCRIPTIONS[deal.card]}</Text>
+          <View style={styles.statusRow}>
+            <Text variant="labelMedium" style={{ color: statusColor }}>● {statusLabel}</Text>
+            <Text variant="labelSmall" style={{ opacity: 0.5 }}>J{matchdayNum}</Text>
+          </View>
+        </Surface>
+      )}
+
+      {/* ── Locked: unlock button ── */}
+      {deal.status === 'locked' && (
+        <>
+          {errorMsg && (
+            <Text variant="bodySmall" style={{ color: theme.colors.error, textAlign: 'center' }}>{errorMsg}</Text>
+          )}
+          <Button
+            mode="contained"
+            icon="lock-open"
+            onPress={() => { setErrorMsg(null); unlock(); }}
+            loading={unlocking}
+            disabled={unlocking}
+            style={styles.playBtn}
+          >
+            Desbloquear carta
+          </Button>
+        </>
+      )}
 
       {/* ── Already played / expired ── */}
       {deal.status === 'played' && (
@@ -392,6 +446,7 @@ const styles = StyleSheet.create({
   container: { padding: 16, gap: 12, paddingBottom: 40 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   cardSurface: { borderRadius: 16, padding: 20, alignItems: 'center', gap: 6 },
+  lockedSurface: { opacity: 0.85 },
   cardEmoji: { fontSize: 48 },
   cardName: { fontWeight: '700', textAlign: 'center' },
   cardDesc: { textAlign: 'center', opacity: 0.7 },

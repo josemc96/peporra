@@ -3,7 +3,7 @@ import { requireAuth } from '../middleware/auth.middleware';
 import {
   getCardConfig, updateCardConfig,
   getMyDeal, getAllDeals, triggerDeal,
-  redealUser, redealAll,
+  redealUser, redealAll, unlockCard,
 } from '../controllers/card.controller';
 import { playCard, spyMatch, getActiveCardPlays } from '../controllers/cardPlay.controller';
 
@@ -23,6 +23,9 @@ router.post('/deal',   triggerDeal);
 // Redeal
 router.post('/redeal',     redealUser);
 router.post('/redeal-all', redealAll);
+
+// Unlock
+router.post('/unlock',         unlockCard);
 
 // Play
 router.post('/play',           playCard);

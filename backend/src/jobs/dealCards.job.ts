@@ -60,7 +60,7 @@ export async function dealCards(groupIdFilter?: Types.ObjectId): Promise<{ dealt
           matchday,
           user: userId,
           card: pickRandom(enabledCards),
-          status: 'pending',
+          status: 'locked',
         });
         dealt++;
       }

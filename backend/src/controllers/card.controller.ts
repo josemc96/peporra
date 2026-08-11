@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import { CardConfig } from '../models/CardConfig';
 import { CardDeal } from '../models/CardDeal';
 import { CardPlay } from '../models/CardPlay';
+import { Match } from '../models/Match';
 import { AppError } from '../utils/AppError';
 import { requireGroupMember, requireGroupAdmin } from '../services/groupAuth.service';
 import { dealCards } from '../jobs/dealCards.job';
@@ -121,7 +122,7 @@ export async function triggerDeal(req: Request, res: Response): Promise<void> {
       matchday,
       user: userId,
       card: pickRandom(enabledCards),
-      status: 'pending',
+      status: 'locked',
     });
     dealt++;
   }
@@ -148,9 +149,47 @@ export async function redealUser(req: Request, res: Response): Promise<void> {
   const deal = await CardDeal.findOne({ group: groupId, season, matchday, user: userId });
   if (!deal) throw new AppError('El usuario no tiene carta en esta jornada', 404);
   if (deal.status === 'played') throw new AppError('La carta ya fue jugada, no se puede cambiar', 409);
+  if (deal.status === 'expired') throw new AppError('La carta ha expirado, no se puede cambiar', 409);
 
   deal.card = pickRandom(config.enabledCards as CardKey[]);
   deal.status = 'pending';
+  await deal.save();
+
+  res.json({ deal });
+}
+
+// ── Unlock (reveal) a locked card ─────────────────────────────────────────
+
+export async function unlockCard(req: Request, res: Response): Promise<void> {
+  const groupId = req.params.groupId as string;
+  const userId = req.user!.id;
+  const { dealId } = req.body as { dealId?: string };
+  if (!dealId) throw new AppError('dealId es obligatorio', 400);
+
+  await requireGroupMember(groupId, userId);
+
+  const deal = await CardDeal.findById(dealId);
+  if (!deal) throw new AppError('Carta no encontrada', 404);
+  if (deal.user.toString() !== userId) throw new AppError('Esta carta no es tuya', 403);
+  if (deal.group.toString() !== groupId) throw new AppError('La carta no pertenece a esta peña', 403);
+  if (deal.status !== 'locked') {
+    if (deal.status === 'expired') throw new AppError('Esta carta ha expirado', 409);
+    throw new AppError('La carta ya está desbloqueada', 409);
+  }
+
+  // Deadline: before the LAST match of this matchday starts
+  const lastMatch = await Match.findOne({
+    competition: 'la_liga',
+    season: deal.season,
+    matchday: deal.matchday,
+  }).sort({ startTime: -1 });
+
+  if (lastMatch && new Date() >= new Date(lastMatch.startTime)) {
+    throw new AppError('La jornada ya ha terminado, no puedes desbloquear la carta', 409);
+  }
+
+  deal.status = 'pending';
+  deal.unlockedAt = new Date();
   await deal.save();
 
   res.json({ deal });
@@ -168,7 +207,7 @@ export async function redealAll(req: Request, res: Response): Promise<void> {
 
   const enabledCards = config.enabledCards as CardKey[];
 
-  const deals = await CardDeal.find({ group: groupId, season, matchday, status: 'pending' });
+  const deals = await CardDeal.find({ group: groupId, season, matchday, status: { $in: ['locked', 'pending'] } });
   for (const deal of deals) {
     deal.card = pickRandom(enabledCards);
     await deal.save();

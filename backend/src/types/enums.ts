@@ -33,4 +33,4 @@ export const ALL_CARD_KEYS: CardKey[] = [
   'el_espia', 'rueda_prensa', 'la_aficion', 'el_doblete', 'me_la_juego',
 ];
 
-export type CardDealStatus = 'pending' | 'played' | 'expired';
+export type CardDealStatus = 'locked' | 'pending' | 'played' | 'expired';

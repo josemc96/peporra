@@ -48,7 +48,7 @@ export const CARD_DESCRIPTIONS: Record<CardKey, string> = {
   me_la_juego: 'Apuesta X puntos en un partido: si aciertas resultado exacto ganas X, si no pierdes X/2.',
 };
 
-export type CardDealStatus = 'pending' | 'played' | 'expired';
+export type CardDealStatus = 'locked' | 'pending' | 'played' | 'expired';
 
 export interface CardConfig {
   _id: string;
@@ -112,6 +112,9 @@ export const cardsApi = {
 
   redealAll: (groupId: string, body: { season: string; matchday: number }): Promise<{ redealt: number }> =>
     apiFetch(`${base(groupId)}/redeal-all`, json(body)),
+
+  unlockCard: (groupId: string, dealId: string): Promise<{ deal: CardDeal }> =>
+    apiFetch(`${base(groupId)}/unlock`, json({ dealId })),
 
   playCard: (groupId: string, body: {
     dealId: string;

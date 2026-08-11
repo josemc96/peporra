@@ -233,18 +233,20 @@ export default function PredictionsTab() {
       )}
 
       {/* Banner carta de jornada (solo La Liga) */}
-      {competitionTab === 'la_liga' && groupId && myDeal?.deal && (
+      {competitionTab === 'la_liga' && groupId && myDeal?.deal && myDeal.deal.status !== 'expired' && (
         <Button
-          mode={myDeal.deal.status === 'pending' ? 'contained-tonal' : 'text'}
-          compact icon="cards-playing"
+          mode={myDeal.deal.status === 'pending' || myDeal.deal.status === 'locked' ? 'contained-tonal' : 'text'}
+          compact icon={myDeal.deal.status === 'locked' ? 'lock' : 'cards-playing'}
           onPress={() => router.push({
             pathname: '/cards/[groupId]' as never,
             params: { groupId, season, matchday: String(selectedMatchday) },
           })}
           style={styles.cardBanner}
         >
-          {CARD_EMOJI[myDeal.deal.card]} {CARD_LABELS[myDeal.deal.card]}
-          {myDeal.deal.status === 'pending' ? ' · Jugar' : myDeal.deal.status === 'played' ? ' · Jugada' : ' · Expirada'}
+          {myDeal.deal.status === 'locked'
+            ? '🔒 Carta bloqueada · Desbloquear'
+            : `${CARD_EMOJI[myDeal.deal.card]} ${CARD_LABELS[myDeal.deal.card]}${myDeal.deal.status === 'pending' ? ' · Jugar' : ' · Jugada'}`
+          }
         </Button>
       )}
 

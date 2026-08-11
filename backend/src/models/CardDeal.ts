@@ -9,16 +9,18 @@ export interface ICardDeal extends Document {
   card: CardKey;
   status: CardDealStatus;
   dealtAt: Date;
+  unlockedAt?: Date;
 }
 
 const CardDealSchema = new Schema<ICardDeal>({
-  group:    { type: Schema.Types.ObjectId, ref: 'Group', required: true },
-  season:   { type: String, required: true },
-  matchday: { type: Number, required: true },
-  user:     { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  card:     { type: String, required: true },
-  status:   { type: String, enum: ['pending', 'played', 'expired'], default: 'pending' },
-  dealtAt:  { type: Date, default: Date.now },
+  group:      { type: Schema.Types.ObjectId, ref: 'Group', required: true },
+  season:     { type: String, required: true },
+  matchday:   { type: Number, required: true },
+  user:       { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  card:       { type: String, required: true },
+  status:     { type: String, enum: ['locked', 'pending', 'played', 'expired'], default: 'locked' },
+  dealtAt:    { type: Date, default: Date.now },
+  unlockedAt: { type: Date },
 });
 
 CardDealSchema.index({ group: 1, season: 1, matchday: 1, user: 1 }, { unique: true });
