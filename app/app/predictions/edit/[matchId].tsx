@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   error: {
-    color: '#9C3B2C',
+    color: '#FF4D6D',
     textAlign: 'center',
   },
   actions: {

@@ -16,8 +16,9 @@ import { apiFetch } from '@/api/client';
 import { awardPredictionsApi, Award } from '@/api/awardPredictions';
 import { useAuth } from '@/context/AuthContext';
 import { useCurrentGroup } from '@/context/CurrentGroupContext';
+import { colors } from '@/config/theme';
 
-const MEDAL_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
+const MEDAL_COLORS = ['#FFBE0B', '#C0C0C0', '#CD7F32'];
 
 // ─── Ranking rows ────────────────────────────────────────────────────────────
 
@@ -498,7 +499,7 @@ export default function GroupTab() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: colors.bg },
   list: { padding: 12, gap: 8, paddingBottom: 8 },
 
   // Código
@@ -521,18 +522,18 @@ const styles = StyleSheet.create({
 
   // Ranking rows
   row: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 10, gap: 10 },
-  rowMe: { borderWidth: 1.5, borderColor: '#1565C0' },
+  rowMe: { borderWidth: 1.5, borderColor: '#C04A1A' },
   posBox: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  posBoxDefault: { backgroundColor: '#E0E0E0' },
-  posText: { fontWeight: '700', color: '#fff' },
-  avatar: { backgroundColor: '#90A4AE' },
+  posBoxDefault: { backgroundColor: '#1C2236' },
+  posText: { fontWeight: '700', color: '#E8EAF2' },
+  avatar: { backgroundColor: '#232B42' },
   userInfo: { flex: 1 },
   alias: { fontWeight: '500' },
-  aliasMe: { color: '#1565C0', fontWeight: '700' },
+  aliasMe: { color: '#C04A1A', fontWeight: '700' },
   exactLabel: { opacity: 0.5, marginTop: 1 },
   rightCol: { alignItems: 'flex-end', gap: 2 },
   points: { fontWeight: '700' },
-  debt: { color: '#B45309', fontWeight: '600' },
+  debt: { color: '#E88C00', fontWeight: '600' },
   emptyText: { textAlign: 'center', opacity: 0.5, marginTop: 32 },
 
   // Premios
@@ -545,7 +546,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     borderRadius: 10, padding: 10, gap: 10,
   },
-  predPlayer: { fontWeight: '700', color: '#1565C0' },
+  predPlayer: { fontWeight: '700', color: '#C04A1A' },
 
   // Footer
   footer: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 8, paddingVertical: 4 },

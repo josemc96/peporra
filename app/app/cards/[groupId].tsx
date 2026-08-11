@@ -454,6 +454,6 @@ const styles = StyleSheet.create({
   playedNote: { textAlign: 'center', opacity: 0.7, marginVertical: 4 },
   sectionTitle: { fontWeight: '600', marginTop: 4 },
   divider: { marginVertical: 8 },
-  pickerBox: { borderWidth: StyleSheet.hairlineWidth, borderColor: '#ccc', borderRadius: 8, overflow: 'hidden' },
+  pickerBox: { borderWidth: StyleSheet.hairlineWidth, borderColor: '#1F2540', borderRadius: 8, overflow: 'hidden' },
   playBtn: { marginTop: 8 },
 });

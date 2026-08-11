@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/context/AuthContext';
 import { useCurrentGroup } from '@/context/CurrentGroupContext';
+import { colors } from '@/config/theme';
 import { rankingApi } from '@/api/ranking';
 import { adminGroupApi } from '@/api/adminGroup';
 import { awardPredictionsApi } from '@/api/awardPredictions';
@@ -146,7 +147,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
       {/* Hero */}
-      <View style={[styles.hero, { backgroundColor: color + '18' }]}>
+      <View style={[styles.hero, { backgroundColor: color + '22' }]}>
         <Avatar.Text
           size={80}
           label={user.alias.slice(0, 2).toUpperCase()}
@@ -224,7 +225,7 @@ export default function ProfileScreen() {
       <View style={styles.actions}>
         {user.role === 'admin' && (
           <Button
-            mode="contained-tonal"
+            mode="contained"
             icon="shield-crown"
             contentStyle={styles.btnContent}
             onPress={() => router.push('/admin/global' as never)}
@@ -238,7 +239,7 @@ export default function ProfileScreen() {
           contentStyle={styles.btnContent}
           onPress={handleLogout}
           textColor={theme.colors.error}
-          style={{ borderColor: theme.colors.errorContainer }}
+          style={{ borderColor: theme.colors.error }}
         >
           Cerrar sesión
         </Button>
@@ -248,7 +249,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: colors.bg },
   container: { flexGrow: 1, paddingBottom: 40 },
 
   // Hero

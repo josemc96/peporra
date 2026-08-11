@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   error: {
-    color: '#9C3B2C',
+    color: '#FF4D6D',
   },
   button: {
     marginTop: 4,

@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { groupsApi, GroupSummary } from '@/api/groups';
 import { useCurrentGroup } from '@/context/CurrentGroupContext';
+import { colors } from '@/config/theme';
 
 function GroupCard({ group, onSelect }: { group: GroupSummary; onSelect: () => void }) {
   return (
@@ -126,7 +127,7 @@ export default function GroupsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: colors.bg },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 12 },
 
   tabsWrapper: {
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
   list: { padding: 16, gap: 12, paddingBottom: 100 },
   card: { width: '100%' },
 
-  errorText: { color: '#9C3B2C' },
+  errorText: { color: '#FF4D6D' },
   retryButton: { marginTop: 8 },
   emptyTitle: { textAlign: 'center' },
   emptySubtitle: { textAlign: 'center', opacity: 0.6 },

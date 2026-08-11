@@ -3,13 +3,13 @@ import { Redirect, Stack, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-import { PaperProvider, MD3DarkTheme, MD3LightTheme, ActivityIndicator } from 'react-native-paper';
+import { PaperProvider, ActivityIndicator } from 'react-native-paper';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { PeporraTheme, colors } from '@/config/theme';
 import { CurrentGroupProvider } from '@/context/CurrentGroupContext';
 import { queryClient } from '@/config/queryClient';
 
@@ -58,17 +58,21 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === 'dark' ? MD3DarkTheme : MD3LightTheme;
-
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <CurrentGroupProvider>
-          <PaperProvider theme={theme}>
+          <PaperProvider theme={PeporraTheme}>
             <AuthGuard>
-              <Stack>
+              <Stack
+                screenOptions={{
+                  contentStyle: { backgroundColor: colors.bg },
+                  headerStyle: { backgroundColor: colors.surface },
+                  headerTintColor: colors.text1,
+                  headerShadowVisible: false,
+                }}
+              >
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="login" options={{ headerShown: false }} />
               <Stack.Screen name="register" options={{ headerShown: false }} />

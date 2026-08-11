@@ -11,6 +11,7 @@ import { predictionsApi, Match, Prediction } from '@/api/predictions';
 import { adminGroupApi, ScoreMultiplier } from '@/api/adminGroup';
 import { cardsApi, CARD_LABELS, CARD_EMOJI } from '@/api/cards';
 import { useCurrentGroup } from '@/context/CurrentGroupContext';
+import { colors } from '@/config/theme';
 
 type Competition = 'la_liga' | 'copa_del_rey' | 'supercopa';
 
@@ -276,7 +277,7 @@ export default function PredictionsTab() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: colors.bg },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   competitionTabsWrapper: {
@@ -287,7 +288,7 @@ const styles = StyleSheet.create({
 
   matchdayNav: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ccc',
+    paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#1F2540',
   },
   matchdayLabel: { fontWeight: '600' },
   matchdayTotal: { opacity: 0.4, fontWeight: 'normal' },
@@ -302,12 +303,12 @@ const styles = StyleSheet.create({
   vs: { opacity: 0.5 },
   scoreCenter: { fontWeight: '700', minWidth: 48, textAlign: 'center' },
   predCenter: { fontWeight: '600', minWidth: 48, textAlign: 'center', opacity: 0.75 },
-  liveIndicator: { color: '#DC2626', fontWeight: '700', minWidth: 64, textAlign: 'center' },
+  liveIndicator: { color: '#8892A4', fontWeight: '700', minWidth: 64, textAlign: 'center' },
   predBtn: { marginLeft: -8 },
-  multChip: { backgroundColor: '#F59E0B', height: 24 },
-  multText: { color: '#1C1917', fontWeight: '700', fontSize: 12 },
+  multChip: { backgroundColor: '#FFBE0B', height: 24 },
+  multText: { color: '#000000', fontWeight: '700', fontSize: 12 },
   dateText: { opacity: 0.5, marginTop: 2 },
   predictionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-  predictionText: { color: '#1E6B45', fontWeight: '600' },
+  predictionText: { color: '#22C55E', fontWeight: '600' },
   noPrediction: { opacity: 0.4, fontStyle: 'italic' },
 });

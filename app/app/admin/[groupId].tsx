@@ -630,7 +630,7 @@ export default function AdminPanelScreen() {
                 key={adj._id}
                 title={`${adj.user.alias} · ${parts.join(' / ')}`}
                 description={adj.reason ?? new Date(adj.createdAt).toLocaleDateString('es-ES')}
-                titleStyle={{ color: isPositive ? '#15803D' : '#B91C1C' }}
+                titleStyle={{ color: isPositive ? '#22C55E' : '#FF4D6D' }}
                 right={() => <IconButton icon="delete" onPress={() => deleteAdj(adj._id)} />}
               />
             );
@@ -729,7 +729,7 @@ export default function AdminPanelScreen() {
               {dealsData?.deals.map((deal: CardDeal) => {
                 const userObj = typeof deal.user === 'object' ? deal.user : null;
                 const alias = userObj?.alias ?? 'Usuario';
-                const statusColor = deal.status === 'played' ? '#15803D' : deal.status === 'expired' ? '#6B7280' : theme.colors.primary;
+                const statusColor = deal.status === 'played' ? '#22C55E' : deal.status === 'expired' ? '#8892A4' : theme.colors.primary;
                 const statusLabel = deal.status === 'played' ? 'Jugada' : deal.status === 'expired' ? 'Expirada' : 'Pendiente';
                 return (
                   <List.Item
@@ -790,7 +790,7 @@ const styles = StyleSheet.create({
   pointsInput: { width: 64 },
   compNote: { opacity: 0.5, marginTop: 4 },
   saveRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 8 },
-  matchList: { maxHeight: 220, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ccc', borderRadius: 8 },
+  matchList: { maxHeight: 220, borderWidth: StyleSheet.hairlineWidth, borderColor: '#1F2540', borderRadius: 8 },
   matchCard: { borderRadius: 10, padding: 14, gap: 6 },
   resultForm: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' },
   scoreInput: { width: 80 },

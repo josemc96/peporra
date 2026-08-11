@@ -12,7 +12,14 @@ export default function TabLayout() {
   return (
     <Tabs
       initialRouteName={inGroup ? 'predictions' : 'index'}
-      screenOptions={{ tabBarActiveTintColor: theme.colors.primary }}
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.onSurface,
+        headerShadowVisible: false,
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
+        tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.outline },
+      }}
     >
       {/* Sin peña */}
       <Tabs.Screen
