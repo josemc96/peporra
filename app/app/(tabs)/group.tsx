@@ -33,10 +33,10 @@ function SeasonRow({ entry, position, isMe, debt, total, onPress, onKick }: {
         <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
           <Text variant="titleMedium" style={styles.posText}>{position}</Text>
         </View>
-        <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
+        <Avatar.Text size={36} label={(entry.user.alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
         <View style={styles.userInfo}>
           <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]}>
-            {entry.user.alias}{isMe ? '  (tú)' : ''}
+            {entry.user.alias ?? '?'}{isMe ? '  (tú)' : ''}
           </Text>
           {entry.exactScores > 0 && (
             <Text variant="labelSmall" style={styles.exactLabel}>
@@ -69,9 +69,9 @@ function MatchdayRow({ entry, position, isMe, total, onPress, onKick }: {
         <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
           <Text variant="titleMedium" style={styles.posText}>{position}</Text>
         </View>
-        <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
+        <Avatar.Text size={36} label={(entry.user.alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
         <Text variant="bodyLarge" style={[styles.alias, styles.userInfo, isMe && styles.aliasMe]}>
-          {entry.user.alias}{isMe ? '  (tú)' : ''}
+          {entry.user.alias ?? '?'}{isMe ? '  (tú)' : ''}
         </Text>
         <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
           {entry.points} pts
@@ -226,9 +226,9 @@ function PremiosSection({
           <View style={styles.predList}>
             {groupPredictions.map((p) => (
               <Surface key={p._id} style={styles.predRow} elevation={1}>
-                <Avatar.Text size={32} label={p.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
+                <Avatar.Text size={32} label={(p.user.alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
                 <View style={styles.userInfo}>
-                  <Text variant="bodyMedium" style={styles.alias}>{p.user.alias}</Text>
+                  <Text variant="bodyMedium" style={styles.alias}>{p.user.alias ?? '?'}</Text>
                 </View>
                 <Text variant="titleSmall" style={styles.predPlayer}>{p.predictedPlayer}</Text>
               </Surface>

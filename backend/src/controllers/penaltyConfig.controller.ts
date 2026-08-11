@@ -116,8 +116,9 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
   const userById = new Map(users.map((u) => [(u._id as Types.ObjectId).toString(), u]));
 
   const ranking = Array.from(totals.entries())
+    .filter(([userId]) => userById.has(userId))
     .map(([userId, points]) => ({
-      user: { id: userId, alias: userById.get(userId)?.alias, email: userById.get(userId)?.email },
+      user: { id: userId, alias: userById.get(userId)!.alias, email: userById.get(userId)!.email },
       points,
       exactScores: exactScores.get(userId) ?? 0,
     }))
@@ -150,10 +151,12 @@ export async function getGroupDebt(req: Request, res: Response): Promise<void> {
   const users = await User.find({ _id: { $in: memberIds } }).select('alias email');
   const userById = new Map(users.map((u) => [(u._id as Types.ObjectId).toString(), u]));
 
-  const debt = Array.from(debtMap.entries()).map(([userId, total]) => ({
-    user: { id: userId, alias: userById.get(userId)?.alias, email: userById.get(userId)?.email },
-    total,
-  }));
+  const debt = Array.from(debtMap.entries())
+    .filter(([userId]) => userById.has(userId))
+    .map(([userId, total]) => ({
+      user: { id: userId, alias: userById.get(userId)!.alias, email: userById.get(userId)!.email },
+      total,
+    }));
 
   res.json({ debt });
 }

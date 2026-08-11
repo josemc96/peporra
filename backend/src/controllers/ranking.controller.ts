@@ -116,8 +116,9 @@ export async function getGroupRanking(req: Request, res: Response): Promise<void
   const userById = new Map(users.map((u) => [(u._id as Types.ObjectId).toString(), u]));
 
   const ranking = Array.from(totals.entries())
+    .filter(([userId]) => userById.has(userId))
     .map(([userId, points]) => ({
-      user: { id: userId, alias: userById.get(userId)?.alias, email: userById.get(userId)?.email },
+      user: { id: userId, alias: userById.get(userId)!.alias, email: userById.get(userId)!.email },
       points,
       exactScores: exactScores.get(userId) ?? 0,
     }))

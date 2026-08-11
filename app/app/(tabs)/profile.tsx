@@ -11,6 +11,7 @@ import { rankingApi } from '@/api/ranking';
 import { adminGroupApi } from '@/api/adminGroup';
 import { awardPredictionsApi } from '@/api/awardPredictions';
 import { standingsPredictionsApi, StandingsPrediction } from '@/api/standingsPredictions';
+import { penaltiesApi } from '@/api/penalties';
 import { apiFetch } from '@/api/client';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -71,7 +72,6 @@ export default function ProfileScreen() {
     queryKey: ['ranking', groupId, season],
     queryFn: () => rankingApi.get(groupId, season),
     enabled: !!groupId,
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: settings } = useQuery({
@@ -126,12 +126,24 @@ export default function ProfileScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: debt } = useQuery({
+    queryKey: ['debt', groupId, season],
+    queryFn: () => penaltiesApi.getDebt(groupId, season),
+    enabled: !!groupId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const myStats = useMemo(() => {
     if (!ranking || !user) return null;
     const pos = ranking.findIndex((e) => e.user.id === user.id);
     if (pos === -1) return null;
     return { points: ranking[pos].points, exactScores: ranking[pos].exactScores, position: pos + 1, total: ranking.length };
   }, [ranking, user]);
+
+  const myDebt = useMemo(() => {
+    if (!debt || !user) return 0;
+    return debt.find((d) => d.user.id === user.id)?.total ?? 0;
+  }, [debt, user]);
 
   const showBetsSection = isSeasonLocked && !!group && (hasPichichi || hasZamora || hasStandings);
 
@@ -176,6 +188,12 @@ export default function ProfileScreen() {
             <StatCard value={myStats?.exactScores ?? '—'} label="Exactos" />
             <StatCard value={myStats ? `${myStats.position}/${myStats.total}` : '—'} label="Posición" />
           </View>
+          {myDebt > 0 && (
+            <Surface style={styles.debtCard} elevation={1}>
+              <Text variant="labelSmall" style={styles.debtLabel}>💸 Deuda acumulada en la peña</Text>
+              <Text variant="headlineMedium" style={styles.debtAmount}>{myDebt}€</Text>
+            </Surface>
+          )}
         </View>
       )}
 
@@ -281,6 +299,10 @@ const styles = StyleSheet.create({
   standingsRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   standingsPos: { width: 24, textAlign: 'right', opacity: 0.5, fontVariant: ['tabular-nums'] },
   standingsTeam: { flex: 1 },
+
+  debtCard: { borderRadius: 12, padding: 16, alignItems: 'center', gap: 4, backgroundColor: colors.errorDim },
+  debtLabel: { color: colors.debt, opacity: 0.9 },
+  debtAmount: { color: colors.debt, fontWeight: '700' },
 
   divider: { marginHorizontal: 20, marginVertical: 20 },
   actions: { paddingHorizontal: 20, gap: 10 },

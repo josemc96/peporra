@@ -28,7 +28,7 @@ function SeasonRow({
       <View style={[styles.positionBox, medalColor ? { backgroundColor: medalColor } : styles.positionBoxDefault]}>
         <Text variant="titleMedium" style={styles.positionText}>{position}</Text>
       </View>
-      <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
+      <Avatar.Text size={36} label={(entry.user.alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
       <View style={styles.userInfo}>
         <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]}>
           {entry.user.alias}{isMe ? '  (tú)' : ''}
@@ -67,7 +67,7 @@ function MatchdayRow({
       <View style={[styles.positionBox, medalColor ? { backgroundColor: medalColor } : styles.positionBoxDefault]}>
         <Text variant="titleMedium" style={styles.positionText}>{position}</Text>
       </View>
-      <Avatar.Text size={36} label={entry.user.alias.slice(0, 2).toUpperCase()} style={styles.avatar} />
+      <Avatar.Text size={36} label={(entry.user.alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
       <View style={styles.userInfo}>
         <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]}>
           {entry.user.alias}{isMe ? '  (tú)' : ''}
