@@ -21,9 +21,9 @@ const MEDAL_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
 
 // ─── Ranking rows ────────────────────────────────────────────────────────────
 
-function SeasonRow({ entry, position, isMe, debt, total, onPress }: {
+function SeasonRow({ entry, position, isMe, debt, total, onPress, onKick }: {
   entry: RankingEntry; position: number; isMe: boolean; debt: number; total: number;
-  onPress: () => void;
+  onPress: () => void; onKick?: () => void;
 }) {
   const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
   return (
@@ -49,14 +49,17 @@ function SeasonRow({ entry, position, isMe, debt, total, onPress }: {
           </Text>
           {debt > 0 && <Text variant="labelSmall" style={styles.debt}>💸 {debt}€</Text>}
         </View>
+        {onKick && (
+          <IconButton icon="account-remove" size={20} onPress={(e) => { e.stopPropagation?.(); onKick(); }} />
+        )}
       </Surface>
     </Pressable>
   );
 }
 
-function MatchdayRow({ entry, position, isMe, total, onPress }: {
+function MatchdayRow({ entry, position, isMe, total, onPress, onKick }: {
   entry: MatchdayRankingEntry; position: number; isMe: boolean; total: number;
-  onPress: () => void;
+  onPress: () => void; onKick?: () => void;
 }) {
   const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
   return (
@@ -72,6 +75,9 @@ function MatchdayRow({ entry, position, isMe, total, onPress }: {
         <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
           {entry.points} pts
         </Text>
+        {onKick && (
+          <IconButton icon="account-remove" size={20} onPress={(e) => { e.stopPropagation?.(); onKick(); }} />
+        )}
       </Surface>
     </Pressable>
   );
@@ -240,6 +246,7 @@ type MainTab = 'ranking' | 'premios';
 export default function GroupTab() {
   const { group, leaveGroup } = useCurrentGroup();
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [mainTab, setMainTab] = useState<MainTab>('ranking');
   const [rankingView, setRankingView] = useState<'matchday' | 'season'>('matchday');
   const [matchday, setMatchday] = useState(1);
@@ -300,6 +307,11 @@ export default function GroupTab() {
     await leaveGroup();
     router.replace('/(tabs)' as never);
   }, [leaveGroup]);
+
+  const { mutate: kick } = useMutation({
+    mutationFn: (userId: string) => groupsApi.kick(groupId, userId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ranking', groupId, season] }),
+  });
 
   async function copyCode() {
     const code = groupDetail?.inviteCode;
@@ -436,6 +448,7 @@ export default function GroupTab() {
               season,
             },
           });
+          const canKick = isGroupAdmin && item.user.id !== user?.id;
           return rankingView === 'season' ? (
             <SeasonRow
               entry={item as RankingEntry}
@@ -444,6 +457,7 @@ export default function GroupTab() {
               debt={debtMap.get(item.user.id) ?? 0}
               total={total}
               onPress={goToProfile}
+              onKick={canKick ? () => kick(item.user.id) : undefined}
             />
           ) : (
             <MatchdayRow
@@ -452,6 +466,7 @@ export default function GroupTab() {
               isMe={item.user.id === user?.id}
               total={total}
               onPress={goToProfile}
+              onKick={canKick ? () => kick(item.user.id) : undefined}
             />
           );
         }}
