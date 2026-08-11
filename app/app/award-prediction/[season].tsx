@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   Divider,
+  Icon,
   List,
   Surface,
   Text,
@@ -16,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { awardPredictionsApi, Award } from '@/api/awardPredictions';
 import { adminGroupApi } from '@/api/adminGroup';
+import { colors } from '@/config/theme';
 
 export default function AwardPredictionScreen() {
   const { season, groupId } = useLocalSearchParams<{ season: string; groupId?: string }>();
@@ -35,7 +37,7 @@ export default function AwardPredictionScreen() {
   const defaultAward: Award = showPichichi ? 'pichichi' : 'zamora';
   const [award, setAward] = useState<Award>(defaultAward);
   const [playerInput, setPlayerInput] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const { data: prediction, isLoading: predLoading } = useQuery({
     queryKey: ['award-prediction', season, award],
@@ -49,25 +51,25 @@ export default function AwardPredictionScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Sync text input with existing prediction when tab/data changes
   useEffect(() => {
     setPlayerInput(prediction?.predictedPlayer ?? '');
-    setSaved(false);
+    setEditing(false);
   }, [prediction, award]);
 
   const { mutate: save, isPending: saving, error } = useMutation({
     mutationFn: () => awardPredictionsApi.upsert(season, award, playerInput.trim()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['award-prediction', season, award] });
-      setSaved(true);
+      setEditing(false);
     },
   });
 
-  const isLocked = prediction?.status === 'scored';
+  const isScored = prediction?.status === 'scored';
+  const hasPrediction = !!prediction;
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      {/* Award selector */}
+      {/* Selector Pichichi / Zamora */}
       {showPichichi && showZamora && (
         <View style={styles.tabRow}>
           <Chip selected={award === 'pichichi'} onPress={() => setAward('pichichi')} style={styles.chip}>
@@ -87,46 +89,86 @@ export default function AwardPredictionScreen() {
         <ActivityIndicator style={{ marginVertical: 16 }} />
       ) : (
         <>
-          {isLocked ? (
-            <Surface style={styles.lockedBox} elevation={1}>
-              <Text variant="bodyMedium" style={{ opacity: 0.6 }}>Predicción puntuada — solo lectura</Text>
-              <Text variant="titleMedium" style={styles.lockedPlayer}>{prediction?.predictedPlayer}</Text>
+          {/* Estado: puntuada — solo lectura */}
+          {isScored && (
+            <Surface style={styles.predictionCard} elevation={1}>
+              <View style={styles.predictionCardInner}>
+                <Icon source="check-circle" size={20} color={colors.green} />
+                <View style={{ flex: 1 }}>
+                  <Text variant="labelSmall" style={styles.predictionCardLabel}>Tu predicción · Puntuada</Text>
+                  <Text variant="titleMedium" style={styles.predictionCardPlayer}>
+                    {prediction?.predictedPlayer}
+                  </Text>
+                </View>
+              </View>
             </Surface>
-          ) : (
-            <>
+          )}
+
+          {/* Estado: predicción guardada, pendiente — vista */}
+          {!isScored && hasPrediction && !editing && (
+            <Surface style={styles.predictionCard} elevation={1}>
+              <View style={styles.predictionCardInner}>
+                <Icon source="account-check" size={20} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text variant="labelSmall" style={styles.predictionCardLabel}>Tu predicción</Text>
+                  <Text variant="titleMedium" style={styles.predictionCardPlayer}>
+                    {prediction.predictedPlayer}
+                  </Text>
+                </View>
+                <Button
+                  mode="text"
+                  compact
+                  onPress={() => setEditing(true)}
+                >
+                  Editar
+                </Button>
+              </View>
+            </Surface>
+          )}
+
+          {/* Estado: sin predicción o editando */}
+          {!isScored && (!hasPrediction || editing) && (
+            <View style={styles.editBlock}>
               <TextInput
                 label={award === 'pichichi' ? 'Nombre del jugador' : 'Nombre del portero'}
                 value={playerInput}
-                onChangeText={(t) => { setPlayerInput(t); setSaved(false); }}
+                onChangeText={(t) => setPlayerInput(t)}
                 mode="outlined"
                 style={styles.input}
                 autoCorrect={false}
+                autoFocus={editing}
               />
               {error && (
                 <Text variant="labelSmall" style={{ color: theme.colors.error }}>
                   {(error as Error).message}
                 </Text>
               )}
-              {saved && (
-                <Text variant="labelMedium" style={{ color: theme.colors.primary }}>
-                  ✓ Predicción guardada
-                </Text>
-              )}
-              <Button
-                mode="contained"
-                onPress={() => save()}
-                loading={saving}
-                disabled={saving || playerInput.trim().length === 0}
-                style={styles.saveBtn}
-              >
-                Guardar predicción
-              </Button>
-            </>
+              <View style={styles.editActions}>
+                {editing && (
+                  <Button
+                    mode="outlined"
+                    onPress={() => { setPlayerInput(prediction?.predictedPlayer ?? ''); setEditing(false); }}
+                    style={styles.editBtn}
+                  >
+                    Cancelar
+                  </Button>
+                )}
+                <Button
+                  mode="contained"
+                  onPress={() => save()}
+                  loading={saving}
+                  disabled={saving || playerInput.trim().length === 0}
+                  style={[styles.editBtn, { flex: 1 }]}
+                >
+                  Guardar predicción
+                </Button>
+              </View>
+            </View>
           )}
         </>
       )}
 
-      {/* Scorers reference list (Pichichi only) */}
+      {/* Lista de goleadores (solo Pichichi) */}
       {award === 'pichichi' && (
         <>
           <Divider style={styles.divider} />
@@ -151,11 +193,11 @@ export default function AwardPredictionScreen() {
                 </Text>
               )}
               right={() =>
-                !isLocked ? (
+                !isScored ? (
                   <Button
                     compact
                     mode="text"
-                    onPress={() => { setPlayerInput(s.playerName); setSaved(false); }}
+                    onPress={() => { setPlayerInput(s.playerName); setEditing(true); }}
                   >
                     Elegir
                   </Button>
@@ -180,15 +222,22 @@ export default function AwardPredictionScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: colors.bg },
   container: { padding: 16, gap: 12, paddingBottom: 40 },
   tabRow: { flexDirection: 'row', gap: 8 },
   chip: { flex: 1 },
   sectionTitle: { marginTop: 4 },
-  input: { marginTop: 4 },
-  saveBtn: { marginTop: 4 },
-  lockedBox: { borderRadius: 8, padding: 16, gap: 8 },
-  lockedPlayer: { fontWeight: 'bold' },
+
+  predictionCard: { borderRadius: 10, padding: 16 },
+  predictionCardInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  predictionCardLabel: { opacity: 0.55, marginBottom: 2 },
+  predictionCardPlayer: { fontWeight: '700' },
+
+  editBlock: { gap: 10 },
+  input: {},
+  editActions: { flexDirection: 'row', gap: 10 },
+  editBtn: {},
+
   divider: { marginVertical: 8 },
   scorerPos: { width: 32, textAlign: 'center', alignSelf: 'center' },
   zamoraNote: { opacity: 0.6, fontStyle: 'italic' },
