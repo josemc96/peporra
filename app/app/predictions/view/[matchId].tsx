@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Avatar, Divider, Surface, Text, useTheme } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -78,7 +78,7 @@ function CardPlayRow({ play, myId }: { play: ActiveCardPlay; myId: string }) {
 }
 
 export default function MatchPredictionViewScreen() {
-  const { matchId, groupId, season, matchday, homeTeam, awayTeam, startTime, homeScore, awayScore } =
+  const { matchId, groupId, season, matchday, homeTeam, awayTeam, startTime, homeScore, awayScore, homeCrest, awayCrest } =
     useLocalSearchParams<{
       matchId: string;
       groupId: string;
@@ -89,6 +89,8 @@ export default function MatchPredictionViewScreen() {
       startTime: string;
       homeScore?: string;
       awayScore?: string;
+      homeCrest?: string;
+      awayCrest?: string;
     }>();
 
   const { user } = useAuth();
@@ -166,13 +168,19 @@ export default function MatchPredictionViewScreen() {
       <Surface style={styles.matchHeader} elevation={1}>
         <Text variant="labelSmall" style={styles.date}>{formatDate(startTime)}</Text>
         <View style={styles.teamsRow}>
-          <Text variant="titleMedium" style={styles.team} numberOfLines={1}>{homeTeam}</Text>
+          <View style={styles.teamCell}>
+            {homeCrest ? <Image source={{ uri: homeCrest }} style={styles.crest} /> : null}
+            <Text variant="titleMedium" style={styles.team} numberOfLines={1}>{homeTeam}</Text>
+          </View>
           {homeScore != null && awayScore != null ? (
             <Text variant="headlineSmall" style={styles.score}>{homeScore} - {awayScore}</Text>
           ) : (
             <Text variant="titleMedium" style={styles.vsText}>vs</Text>
           )}
-          <Text variant="titleMedium" style={[styles.team, { textAlign: 'right' }]} numberOfLines={1}>{awayTeam}</Text>
+          <View style={[styles.teamCell, styles.teamCellRight]}>
+            <Text variant="titleMedium" style={[styles.team, { textAlign: 'right' }]} numberOfLines={1}>{awayTeam}</Text>
+            {awayCrest ? <Image source={{ uri: awayCrest }} style={styles.crest} /> : null}
+          </View>
         </View>
       </Surface>
 
@@ -268,7 +276,10 @@ const styles = StyleSheet.create({
   matchHeader: { borderRadius: 10, padding: 16, gap: 8 },
   date: { textAlign: 'center', opacity: 0.5, textTransform: 'capitalize' },
   teamsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  team: { flex: 1, fontWeight: '600' },
+  teamCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  teamCellRight: { justifyContent: 'flex-end' },
+  crest: { width: 26, height: 26 },
+  team: { flexShrink: 1, fontWeight: '600' },
   score: { fontWeight: '700', minWidth: 60, textAlign: 'center' },
   vsText: { opacity: 0.4, minWidth: 32, textAlign: 'center' },
   sectionTitle: { fontWeight: '700', marginTop: 4 },

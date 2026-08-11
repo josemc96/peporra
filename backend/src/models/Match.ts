@@ -8,6 +8,8 @@ export interface IMatch extends Document {
   isKnockout: boolean;
   homeTeam: string;
   awayTeam: string;
+  homeCrest?: string;
+  awayCrest?: string;
   startTime: Date;
   homeScore?: number;
   awayScore?: number;
@@ -30,6 +32,8 @@ const matchSchema = new Schema<IMatch>({
   isKnockout: { type: Boolean, default: false },
   homeTeam: { type: String, required: true },
   awayTeam: { type: String, required: true },
+  homeCrest: { type: String },
+  awayCrest: { type: String },
   startTime: { type: Date, required: true },
   homeScore: { type: Number },
   awayScore: { type: Number },

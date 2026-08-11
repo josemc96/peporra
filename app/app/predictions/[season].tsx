@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, Image, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator, Button, Card, Chip, IconButton,
   SegmentedButtons, Text,
@@ -57,6 +57,8 @@ function MatchCard({
         startTime: match.startTime,
         currentHome: hasPrediction ? String(prediction.predictedHome) : '',
         currentAway: hasPrediction ? String(prediction.predictedAway) : '',
+        homeCrest: match.homeCrest,
+        awayCrest: match.awayCrest,
       },
     });
   }
@@ -71,6 +73,8 @@ function MatchCard({
         homeTeam: match.homeTeam, awayTeam: match.awayTeam, startTime: match.startTime,
         homeScore: match.homeScore != null ? String(match.homeScore) : undefined,
         awayScore: match.awayScore != null ? String(match.awayScore) : undefined,
+        homeCrest: match.homeCrest,
+        awayCrest: match.awayCrest,
       },
     });
   }
@@ -79,9 +83,10 @@ function MatchCard({
     <Card style={styles.matchCard} onPress={isLocked ? openView : openEditor}>
       <Card.Content style={styles.cardContent}>
         <View style={styles.teamsRow}>
-          <Text variant="titleSmall" style={styles.team} numberOfLines={1}>
-            {match.homeTeam}
-          </Text>
+          <View style={styles.teamCell}>
+            {match.homeCrest ? <Image source={{ uri: match.homeCrest }} style={styles.crest} /> : null}
+            <Text variant="titleSmall" style={styles.team} numberOfLines={1}>{match.homeTeam}</Text>
+          </View>
           {match.status === 'finished' ? (
             <Text variant="titleMedium" style={styles.scoreCenter}>
               {match.homeScore} - {match.awayScore}
@@ -95,9 +100,10 @@ function MatchCard({
           ) : (
             <Text variant="labelMedium" style={styles.vs}>vs</Text>
           )}
-          <Text variant="titleSmall" style={[styles.team, styles.teamRight]} numberOfLines={1}>
-            {match.awayTeam}
-          </Text>
+          <View style={[styles.teamCell, styles.teamCellRight]}>
+            <Text variant="titleSmall" style={[styles.team, styles.teamRight]} numberOfLines={1}>{match.awayTeam}</Text>
+            {match.awayCrest ? <Image source={{ uri: match.awayCrest }} style={styles.crest} /> : null}
+          </View>
           {multiplier != null && (
             <Chip compact style={styles.multChip} textStyle={styles.multText}>
               ×{multiplier}
@@ -331,7 +337,10 @@ const styles = StyleSheet.create({
   matchCard: { width: '100%' },
   cardContent: { gap: 4 },
   teamsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  team: { flex: 1 },
+  teamCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  teamCellRight: { justifyContent: 'flex-end' },
+  crest: { width: 22, height: 22 },
+  team: { flexShrink: 1 },
   teamRight: { textAlign: 'right' },
   vs: { opacity: 0.5 },
   scoreCenter: { fontWeight: '700', minWidth: 48, textAlign: 'center' },

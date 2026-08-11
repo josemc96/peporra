@@ -8,6 +8,8 @@ export interface Match {
   isKnockout: boolean;
   homeTeam: string;
   awayTeam: string;
+  homeCrest?: string;
+  awayCrest?: string;
   startTime: string;
   homeScore?: number;
   awayScore?: number;

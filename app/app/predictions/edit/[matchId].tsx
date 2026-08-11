@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { Button, Text, TextInput } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { predictionsApi } from '@/api/predictions';
 import { ApiError } from '@/api/client';
+import { colors } from '@/config/theme';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('es-ES', {
@@ -14,7 +15,7 @@ function formatDate(iso: string): string {
 }
 
 export default function EditPredictionScreen() {
-  const { matchId, season, homeTeam, awayTeam, startTime, currentHome, currentAway } =
+  const { matchId, season, homeTeam, awayTeam, startTime, currentHome, currentAway, homeCrest, awayCrest } =
     useLocalSearchParams<{
       matchId: string;
       season: string;
@@ -23,6 +24,8 @@ export default function EditPredictionScreen() {
       startTime: string;
       currentHome: string;
       currentAway: string;
+      homeCrest?: string;
+      awayCrest?: string;
     }>();
 
   const queryClient = useQueryClient();
@@ -38,7 +41,7 @@ export default function EditPredictionScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['predictions', season] });
-      router.back();
+      if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
     },
     onError: (err) => {
       setError(err instanceof ApiError ? err.message : 'Error al guardar la predicción');
@@ -66,6 +69,7 @@ export default function EditPredictionScreen() {
         {/* Equipos y marcador */}
         <View style={styles.scoreRow}>
           <View style={styles.teamBlock}>
+            {homeCrest ? <Image source={{ uri: homeCrest }} style={styles.crest} /> : null}
             <Text variant="titleMedium" style={styles.teamName} numberOfLines={2}>
               {homeTeam}
             </Text>
@@ -95,6 +99,7 @@ export default function EditPredictionScreen() {
           </View>
 
           <View style={[styles.teamBlock, styles.teamRight]}>
+            {awayCrest ? <Image source={{ uri: awayCrest }} style={styles.crest} /> : null}
             <Text variant="titleMedium" style={[styles.teamName, { textAlign: 'right' }]} numberOfLines={2}>
               {awayTeam}
             </Text>
@@ -104,7 +109,7 @@ export default function EditPredictionScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <View style={styles.actions}>
-          <Button mode="outlined" onPress={() => router.back()} style={styles.button}>
+          <Button mode="outlined" onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.button}>
             Cancelar
           </Button>
           <Button
@@ -125,6 +130,7 @@ export default function EditPredictionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.bg,
   },
   inner: {
     flex: 1,
@@ -144,12 +150,19 @@ const styles = StyleSheet.create({
   },
   teamBlock: {
     flex: 1,
+    alignItems: 'center',
+    gap: 6,
   },
   teamRight: {
     alignItems: 'flex-end',
   },
+  crest: {
+    width: 36,
+    height: 36,
+  },
   teamName: {
     fontWeight: '600',
+    textAlign: 'center',
   },
   scoreInputs: {
     flexDirection: 'row',

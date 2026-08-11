@@ -36,6 +36,8 @@ export async function syncLaLigaMatches(season: string): Promise<SyncMatchesResu
         isKnockout: false,
         homeTeam: apiMatch.homeTeam.name,
         awayTeam: apiMatch.awayTeam.name,
+        homeCrest: apiMatch.homeTeam.crest,
+        awayCrest: apiMatch.awayTeam.crest,
         startTime: new Date(apiMatch.utcDate),
         homeScore: apiMatch.score.fullTime.home ?? undefined,
         awayScore: apiMatch.score.fullTime.away ?? undefined,

@@ -9,8 +9,8 @@ export interface FootballDataMatch {
   utcDate: string;
   status: 'SCHEDULED' | 'TIMED' | 'IN_PLAY' | 'PAUSED' | 'FINISHED' | 'POSTPONED' | 'SUSPENDED' | 'CANCELLED';
   matchday: number;
-  homeTeam: { name: string };
-  awayTeam: { name: string };
+  homeTeam: { name: string; crest?: string };
+  awayTeam: { name: string; crest?: string };
   score: { fullTime: { home: number | null; away: number | null } };
 }
 
