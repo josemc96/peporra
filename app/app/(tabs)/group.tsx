@@ -314,13 +314,13 @@ export default function GroupTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ranking', groupId, season] }),
   });
 
-  async function copyCode() {
+  const copyCode = useCallback(async () => {
     const code = groupDetail?.inviteCode;
     if (!code) return;
     await Clipboard.setStringAsync(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }
+  }, [groupDetail?.inviteCode]);
 
   const feats = settings?.enabledFeatures ?? [];
   const comps = settings?.enabledCompetitions ?? [];
@@ -336,7 +336,7 @@ export default function GroupTab() {
 
   if (!group) return null;
 
-  const ListHeader = (
+  const renderHeader = useCallback(() => (
     <View>
       {/* Código de invitación */}
       <Surface style={styles.codeBox} elevation={1}>
@@ -424,14 +424,17 @@ export default function GroupTab() {
         </>
       )}
     </View>
-  );
+  ), [
+    groupDetail, copied, copyCode, hasStandings, season, mainTab, hasPremios,
+    groupId, isSeasonLocked, hasPichichi, hasZamora, rankingView, matchday, rankingIsLoading,
+  ]);
 
   return (
     <View style={styles.container}>
       <FlatList
         data={mainTab === 'ranking' && !rankingIsLoading ? rankingData : []}
         keyExtractor={(e) => e.user.id}
-        ListHeaderComponent={ListHeader}
+        ListHeaderComponent={renderHeader}
         renderItem={({ item, index }) => {
           const total = rankingData.length;
           const globalEntry = seasonRanking?.find((e) => e.user.id === item.user.id);

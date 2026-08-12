@@ -173,9 +173,12 @@ export default function PredictionsScreen() {
   const hasSupercopaEnabled = enabledCompetitions.includes('supercopa');
 
   useEffect(() => {
-    if (competitionTab === 'copa_del_rey' && !hasCopaEnabled) setCompetitionTab('la_liga');
-    if (competitionTab === 'supercopa' && !hasSupercopaEnabled) setCompetitionTab('la_liga');
-  }, [hasCopaEnabled, hasSupercopaEnabled, competitionTab]);
+    setCompetitionTab((tab) => {
+      if (tab === 'copa_del_rey' && !hasCopaEnabled) return 'la_liga';
+      if (tab === 'supercopa' && !hasSupercopaEnabled) return 'la_liga';
+      return tab;
+    });
+  }, [hasCopaEnabled, hasSupercopaEnabled]);
 
   const competitionTabs = useMemo(() => {
     const tabs: { value: string; label: string }[] = [{ value: 'la_liga', label: 'La Liga' }];
