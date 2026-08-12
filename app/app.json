@@ -8,9 +8,11 @@
     "scheme": "peporra",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.josemc96.peporra"
     },
     "android": {
+      "package": "com.josemc96.peporra",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
