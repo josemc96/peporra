@@ -334,6 +334,11 @@ export default function GroupTab() {
   const rankingData: (RankingEntry | MatchdayRankingEntry)[] =
     rankingView === 'season' ? (seasonRanking ?? []) : (matchdayData?.ranking ?? []);
 
+  const flatListData = useMemo(
+    () => (mainTab === 'ranking' && !rankingIsLoading ? rankingData : []),
+    [mainTab, rankingIsLoading, rankingData],
+  );
+
   if (!group) return null;
 
   const renderHeader = useCallback(() => (
@@ -429,51 +434,53 @@ export default function GroupTab() {
     groupId, isSeasonLocked, hasPichichi, hasZamora, rankingView, matchday, rankingIsLoading,
   ]);
 
+  const renderItem = useCallback(({ item, index }: { item: RankingEntry | MatchdayRankingEntry; index: number }) => {
+    const total = rankingData.length;
+    const globalEntry = seasonRanking?.find((e) => e.user.id === item.user.id);
+    const globalPos = seasonRanking ? (seasonRanking.findIndex((e) => e.user.id === item.user.id) + 1) : 0;
+    const goToProfile = () => router.push({
+      pathname: '/user/[userId]' as never,
+      params: {
+        userId: item.user.id,
+        alias: item.user.alias,
+        points: String(globalEntry?.points ?? 0),
+        exactScores: String(globalEntry?.exactScores ?? 0),
+        position: String(globalPos),
+        total: String(seasonRanking?.length ?? total),
+        groupId,
+        season,
+      },
+    });
+    const canKick = isGroupAdmin && item.user.id !== user?.id;
+    return rankingView === 'season' ? (
+      <SeasonRow
+        entry={item as RankingEntry}
+        position={index + 1}
+        isMe={item.user.id === user?.id}
+        debt={debtMap.get(item.user.id) ?? 0}
+        total={total}
+        onPress={goToProfile}
+        onKick={canKick ? () => kick(item.user.id) : undefined}
+      />
+    ) : (
+      <MatchdayRow
+        entry={item as MatchdayRankingEntry}
+        position={index + 1}
+        isMe={item.user.id === user?.id}
+        total={total}
+        onPress={goToProfile}
+        onKick={canKick ? () => kick(item.user.id) : undefined}
+      />
+    );
+  }, [rankingData, seasonRanking, groupId, season, isGroupAdmin, user?.id, debtMap, rankingView, kick]);
+
   return (
     <View style={styles.container}>
       <FlatList
-        data={mainTab === 'ranking' && !rankingIsLoading ? rankingData : []}
+        data={flatListData}
         keyExtractor={(e) => e.user.id}
         ListHeaderComponent={renderHeader}
-        renderItem={({ item, index }) => {
-          const total = rankingData.length;
-          const globalEntry = seasonRanking?.find((e) => e.user.id === item.user.id);
-          const globalPos = seasonRanking ? (seasonRanking.findIndex((e) => e.user.id === item.user.id) + 1) : 0;
-          const goToProfile = () => router.push({
-            pathname: '/user/[userId]' as never,
-            params: {
-              userId: item.user.id,
-              alias: item.user.alias,
-              points: String(globalEntry?.points ?? 0),
-              exactScores: String(globalEntry?.exactScores ?? 0),
-              position: String(globalPos),
-              total: String(seasonRanking?.length ?? total),
-              groupId,
-              season,
-            },
-          });
-          const canKick = isGroupAdmin && item.user.id !== user?.id;
-          return rankingView === 'season' ? (
-            <SeasonRow
-              entry={item as RankingEntry}
-              position={index + 1}
-              isMe={item.user.id === user?.id}
-              debt={debtMap.get(item.user.id) ?? 0}
-              total={total}
-              onPress={goToProfile}
-              onKick={canKick ? () => kick(item.user.id) : undefined}
-            />
-          ) : (
-            <MatchdayRow
-              entry={item as MatchdayRankingEntry}
-              position={index + 1}
-              isMe={item.user.id === user?.id}
-              total={total}
-              onPress={goToProfile}
-              onKick={canKick ? () => kick(item.user.id) : undefined}
-            />
-          );
-        }}
+        renderItem={renderItem}
         ListEmptyComponent={
           mainTab === 'ranking' && !rankingIsLoading ? (
             <Text style={styles.emptyText}>Sin datos para esta jornada todavía.</Text>
