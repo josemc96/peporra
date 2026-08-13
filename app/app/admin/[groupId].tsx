@@ -263,6 +263,7 @@ export default function AdminPanelScreen() {
     { position: 2, amount: 0 },
     { position: 3, amount: 0 },
   ]);
+  const [penaltyRawInputs, setPenaltyRawInputs] = useState<Record<number, string>>({ 1: '0', 2: '0', 3: '0' });
   const [penaltiesSaved, setPenaltiesSaved] = useState(false);
 
   const { data: penaltyConfig } = useQuery({
@@ -271,7 +272,11 @@ export default function AdminPanelScreen() {
     enabled: tab === 'penalties',
   });
   if (penaltyConfig && localPenalties[0].amount === 0 && penaltyConfig.penalties.length > 0) {
-    setLocalPenalties(penaltyConfig.penalties.map((p) => ({ ...p })));
+    const loaded = penaltyConfig.penalties.map((p) => ({ ...p }));
+    setLocalPenalties(loaded);
+    const raw: Record<number, string> = {};
+    loaded.forEach((p) => { raw[p.position] = String(p.amount); });
+    setPenaltyRawInputs(raw);
   }
 
   const { mutate: savePenalties, isPending: savingPenalties } = useMutation({
@@ -284,8 +289,12 @@ export default function AdminPanelScreen() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['debt', groupId, season] }),
   });
 
-  function patchPenalty(position: number, amount: number) {
-    setLocalPenalties((prev) => prev.map((p) => p.position === position ? { ...p, amount } : p));
+  function patchPenalty(position: number, rawText: string) {
+    setPenaltyRawInputs((prev) => ({ ...prev, [position]: rawText }));
+    const n = rawText === '' ? 0 : parseFloat(rawText);
+    if (!isNaN(n) && n >= 0) {
+      setLocalPenalties((prev) => prev.map((p) => p.position === position ? { ...p, amount: n } : p));
+    }
     setPenaltiesSaved(false);
   }
 
@@ -530,9 +539,11 @@ export default function AdminPanelScreen() {
               <View key={pos} style={styles.penaltyRow}>
                 <Text variant="bodyMedium" style={{ flex: 1 }}>{label}</Text>
                 <TextInput
-                  value={String(entry.amount)}
-                  onChangeText={(v) => { const n = parseFloat(v); if (!isNaN(n) && n >= 0) patchPenalty(pos, n); }}
-                  keyboardType="numeric"
+                  value={penaltyRawInputs[pos] ?? String(entry.amount)}
+                  onChangeText={(v) => {
+                    if (v === '' || /^\d*\.?\d*$/.test(v)) patchPenalty(pos, v);
+                  }}
+                  keyboardType="decimal-pad"
                   mode="outlined"
                   dense
                   style={styles.pointsInput}
