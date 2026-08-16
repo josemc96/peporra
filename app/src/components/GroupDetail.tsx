@@ -177,7 +177,7 @@ export function GroupDetail({ groupId, onLeave }: Props) {
             mode="outlined"
             icon="trophy-outline"
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            onPress={() => router.push({ pathname: '/knockout/[season]' as any, params: { season: group.season } })}
+            onPress={() => router.push({ pathname: '/knockout/[season]' as any, params: { season: group.season, groupId: group._id } })}
           >
             Copa / Supercopa
           </Button>

@@ -339,8 +339,6 @@ export default function GroupTab() {
     [mainTab, rankingIsLoading, rankingData],
   );
 
-  if (!group) return null;
-
   const renderHeader = useCallback(() => (
     <View>
       {/* Código de invitación */}
@@ -473,6 +471,8 @@ export default function GroupTab() {
       />
     );
   }, [rankingData, seasonRanking, groupId, season, isGroupAdmin, user?.id, debtMap, rankingView, kick]);
+
+  if (!group) return null;
 
   return (
     <View style={styles.container}>

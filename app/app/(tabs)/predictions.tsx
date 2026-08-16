@@ -43,7 +43,7 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
     router.push({
       pathname: '/predictions/edit/[matchId]',
       params: {
-        matchId: match._id, season,
+        matchId: match._id, season, groupId,
         homeTeam: match.homeTeam, awayTeam: match.awayTeam, startTime: match.startTime,
         currentHome: hasPrediction ? String(prediction.predictedHome) : '',
         currentAway: hasPrediction ? String(prediction.predictedAway) : '',
@@ -125,9 +125,9 @@ export default function PredictionsTab() {
   });
 
   const { data: predictions, isLoading: loadingPredictions } = useQuery({
-    queryKey: ['predictions', season],
-    queryFn: () => predictionsApi.listMyPredictions(season),
-    enabled: !!season,
+    queryKey: ['predictions', season, groupId],
+    queryFn: () => predictionsApi.listMyPredictions(season, groupId),
+    enabled: !!season && !!groupId,
   });
 
   const { data: multipliers } = useQuery({

@@ -2,7 +2,6 @@ import { Types } from 'mongoose';
 import { Match } from '../models/Match';
 import { Prediction } from '../models/Prediction';
 import { PredictionScore } from '../models/PredictionScore';
-import { User } from '../models/User';
 import { Group } from '../models/Group';
 import { Rule } from '../models/Rule';
 import { CardDeal } from '../models/CardDeal';
@@ -45,71 +44,77 @@ export async function scoreMatchPredictions(): Promise<ScoreMatchPredictionsResu
 
   for (const prediction of pendingPredictions) {
     const match = matchById.get(prediction.match.toString())!;
-    const user = await User.findById(prediction.user);
-    if (!user) continue;
 
-    const groups = await Group.find({ members: user._id });
-
-    for (const group of groups) {
-      const eligible = await isCompetitionEnabledForGroup(group._id as Types.ObjectId, match.season, match.competition);
-      if (!eligible) continue;
-
-      const activeRules = await resolveActiveRules(group._id as Types.ObjectId, match.season, 'match');
-
-      const varActive = await hasVarPlay(
-        prediction.user as Types.ObjectId,
-        group._id as Types.ObjectId,
-        match.season,
-        match.matchday,
-        match._id as Types.ObjectId,
-      );
-
-      const pH = prediction.predictedHome;
-      const pA = prediction.predictedAway;
-      const rH = match.homeScore!;
-      const rA = match.awayScore!;
-      // If VAR is active and the prediction misses exact by ±1 on one side, treat as exact
-      const effectiveHome = (varActive && varCoversResult(pH, pA, rH, rA)) ? rH : pH;
-      const effectiveAway = (varActive && varCoversResult(pH, pA, rH, rA)) ? rA : pA;
-
-      let totalPoints = 0;
-      const ruleBreakdown: { rule: Types.ObjectId; points: number }[] = [];
-
-      for (const active of activeRules) {
-        const evaluator = ruleEvaluators[active.key];
-        const occurrences = evaluator({
-          predictedHome: effectiveHome,
-          predictedAway: effectiveAway,
-          realHome: rH,
-          realAway: rA,
-        } as never);
-
-        if (occurrences > 0) {
-          const rulePoints = occurrences * active.points;
-          totalPoints += rulePoints;
-          const ruleId = ruleIdByKey.get(active.key);
-          if (ruleId) ruleBreakdown.push({ rule: ruleId, points: rulePoints });
-        }
-      }
-
-      const multiplier = await resolveMultiplier(group._id as Types.ObjectId, match._id as Types.ObjectId, match.matchday);
-      const finalPoints = totalPoints * multiplier;
-
-      await PredictionScore.findOneAndUpdate(
-        { prediction: prediction._id, group: group._id },
-        {
-          $set: {
-            prediction: prediction._id,
-            group: group._id,
-            points: finalPoints,
-            preCardPoints: finalPoints,
-            ruleBreakdown,
-            multiplierApplied: multiplier > 1 ? multiplier : undefined,
-          },
-        },
-        { upsert: true }
-      );
+    const group = await Group.findById(prediction.group);
+    if (!group) {
+      prediction.status = 'scored';
+      await prediction.save();
+      continue;
     }
+
+    const eligible = await isCompetitionEnabledForGroup(group._id as Types.ObjectId, match.season, match.competition);
+    if (!eligible) {
+      prediction.status = 'scored';
+      await prediction.save();
+      predictionsScored += 1;
+      continue;
+    }
+
+    const activeRules = await resolveActiveRules(group._id as Types.ObjectId, match.season, 'match');
+
+    const varActive = await hasVarPlay(
+      prediction.user as Types.ObjectId,
+      group._id as Types.ObjectId,
+      match.season,
+      match.matchday,
+      match._id as Types.ObjectId,
+    );
+
+    const pH = prediction.predictedHome;
+    const pA = prediction.predictedAway;
+    const rH = match.homeScore!;
+    const rA = match.awayScore!;
+    // If VAR is active and the prediction misses exact by ±1 on one side, treat as exact
+    const effectiveHome = (varActive && varCoversResult(pH, pA, rH, rA)) ? rH : pH;
+    const effectiveAway = (varActive && varCoversResult(pH, pA, rH, rA)) ? rA : pA;
+
+    let totalPoints = 0;
+    const ruleBreakdown: { rule: Types.ObjectId; points: number }[] = [];
+
+    for (const active of activeRules) {
+      const evaluator = ruleEvaluators[active.key];
+      const occurrences = evaluator({
+        predictedHome: effectiveHome,
+        predictedAway: effectiveAway,
+        realHome: rH,
+        realAway: rA,
+      } as never);
+
+      if (occurrences > 0) {
+        const rulePoints = occurrences * active.points;
+        totalPoints += rulePoints;
+        const ruleId = ruleIdByKey.get(active.key);
+        if (ruleId) ruleBreakdown.push({ rule: ruleId, points: rulePoints });
+      }
+    }
+
+    const multiplier = await resolveMultiplier(group._id as Types.ObjectId, match._id as Types.ObjectId, match.matchday);
+    const finalPoints = totalPoints * multiplier;
+
+    await PredictionScore.findOneAndUpdate(
+      { prediction: prediction._id, group: group._id },
+      {
+        $set: {
+          prediction: prediction._id,
+          group: group._id,
+          points: finalPoints,
+          preCardPoints: finalPoints,
+          ruleBreakdown,
+          multiplierApplied: multiplier > 1 ? multiplier : undefined,
+        },
+      },
+      { upsert: true }
+    );
 
     prediction.status = 'scored';
     await prediction.save();
