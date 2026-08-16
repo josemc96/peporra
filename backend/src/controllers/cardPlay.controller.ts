@@ -102,15 +102,11 @@ async function validatePlay(
       return { targetMatchId: matchId, params: {} };
     }
 
-    // ── El Espía: spy window (-30 min before kickoff) ───────────────────
+    // ── El Espía: can spy any match in matchday before kickoff ──────────
     case 'el_espia': {
       if (!matchId) throw new AppError('matchId es obligatorio', 400);
       const match = await resolveMatch(matchId);
-      const now = new Date();
-      const kickoff = new Date(match.startTime);
-      const windowOpen = new Date(kickoff.getTime() - 30 * 60 * 1000);
-      if (now < windowOpen) throw new AppError('La ventana del Espía aún no ha abierto (faltan más de 30 minutos)', 400);
-      if (now >= kickoff) throw new AppError('El partido ya ha empezado', 409);
+      if (new Date() >= new Date(match.startTime)) throw new AppError('El partido ya ha empezado', 409);
       // Optional copy
       const { copiedUserId } = params as { copiedUserId?: string };
       if (copiedUserId) {
@@ -207,12 +203,7 @@ export async function spyMatch(req: Request, res: Response): Promise<void> {
   const group = await requireGroupMember(groupId, userId);
 
   const match = await resolveMatch(matchId);
-  const now = new Date();
-  const kickoff = new Date(match.startTime);
-  const windowOpen = new Date(kickoff.getTime() - 30 * 60 * 1000);
-
-  if (now < windowOpen) throw new AppError('La ventana del Espía aún no ha abierto', 400);
-  if (now >= kickoff) throw new AppError('El partido ya ha empezado', 409);
+  if (new Date() >= new Date(match.startTime)) throw new AppError('El partido ya ha empezado', 409);
 
   // User must have an unused Espía card for this matchday
   const espíaDeal = await CardDeal.findOne({
