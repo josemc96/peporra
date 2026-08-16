@@ -41,7 +41,7 @@ export const CARD_DESCRIPTIONS: Record<CardKey, string> = {
   la_lesion: 'Un rival obtiene la mitad de puntos en un partido.',
   el_var: 'Si fallas el resultado exacto por un solo gol en un lado (y el otro lo aciertas), cuenta como resultado exacto.',
   el_autobus: 'Quedas inmune en un partido y tienes mínimo 1 punto.',
-  el_espia: 'Consulta la predicción de un rival antes del partido.',
+  el_espia: 'Consulta las predicciones de tus rivales en los 30 minutos previos al partido y copia la que quieras.',
   rueda_prensa: 'Convocas a un rival: su predicción en un partido se hace pública para toda la peña, y si la cambia también se ve.',
   la_aficion: 'Recibes la mitad de puntos de un rival que quede en el podio de jornada.',
   el_doblete: 'Doblas tus puntos base en un partido.',
@@ -112,6 +112,9 @@ export const cardsApi = {
 
   redealAll: (groupId: string, body: { season: string; matchday: number }): Promise<{ redealt: number }> =>
     apiFetch(`${base(groupId)}/redeal-all`, json(body)),
+
+  resetDeal: (groupId: string, dealId: string): Promise<{ deal: CardDeal }> =>
+    apiFetch(`${base(groupId)}/reset`, json({ dealId })),
 
   unlockCard: (groupId: string, dealId: string): Promise<{ deal: CardDeal }> =>
     apiFetch(`${base(groupId)}/unlock`, json({ dealId })),

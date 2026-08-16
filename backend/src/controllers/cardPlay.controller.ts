@@ -74,6 +74,8 @@ async function validatePlay(
       const match = await resolveMatch(matchId);
       assertBeforeKickoff(match);
       if (match.matchday !== deal.matchday) throw new AppError('El partido no pertenece a la jornada de la carta', 400);
+      const hasPred = await Prediction.findOne({ user: userId, match: matchId });
+      if (!hasPred) throw new AppError('Debes tener una predicción para este partido antes de usar esta carta', 400);
       return { targetMatchId: matchId, params: {} };
     }
 

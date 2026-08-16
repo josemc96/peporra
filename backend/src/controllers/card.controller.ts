@@ -195,6 +195,25 @@ export async function unlockCard(req: Request, res: Response): Promise<void> {
   res.json({ deal });
 }
 
+export async function resetDeal(req: Request, res: Response): Promise<void> {
+  const groupId = req.params.groupId as string;
+  const { dealId } = req.body as { dealId?: string };
+  if (!dealId) throw new AppError('dealId es obligatorio', 400);
+
+  await requireGroupAdmin(groupId, req.user!.id);
+
+  const deal = await CardDeal.findById(dealId);
+  if (!deal) throw new AppError('Carta no encontrada', 404);
+  if (deal.group.toString() !== groupId) throw new AppError('La carta no pertenece a esta peña', 403);
+  if (deal.status !== 'played') throw new AppError('Solo se pueden resetear cartas jugadas', 409);
+
+  await CardPlay.deleteOne({ deal: deal._id });
+  deal.status = 'pending';
+  await deal.save();
+
+  res.json({ deal });
+}
+
 export async function redealAll(req: Request, res: Response): Promise<void> {
   const groupId = req.params.groupId as string;
   const { season, matchday } = req.body as { season: string; matchday: number };

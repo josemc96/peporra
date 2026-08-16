@@ -408,6 +408,11 @@ export default function AdminPanelScreen() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['card-deals', groupId, season, cardMatchday] }),
   });
 
+  const { mutate: resetOne } = useMutation({
+    mutationFn: (dealId: string) => cardsApi.resetDeal(groupId, dealId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['card-deals', groupId, season, cardMatchday] }),
+  });
+
   // ── Tabs ───────────────────────────────────────────────────────────────────
   const tabs: Array<{ key: 'rules' | 'multipliers' | 'matches' | 'penalties' | 'adjustments' | 'cards'; label: string }> = [
     { key: 'rules', label: 'Reglas' },
@@ -741,17 +746,23 @@ export default function AdminPanelScreen() {
                 const userObj = typeof deal.user === 'object' ? deal.user : null;
                 const alias = userObj?.alias ?? 'Usuario';
                 const statusColor = deal.status === 'played' ? '#22C55E' : deal.status === 'expired' ? '#8892A4' : theme.colors.primary;
-                const statusLabel = deal.status === 'played' ? 'Jugada' : deal.status === 'expired' ? 'Expirada' : 'Pendiente';
+                const statusLabel = deal.status === 'played' ? 'Jugada' : deal.status === 'expired' ? 'Expirada' : deal.status === 'locked' ? 'Bloqueada' : 'Pendiente';
                 return (
                   <List.Item
                     key={deal._id}
                     title={alias}
                     description={`${CARD_LABELS[deal.card]} · ${statusLabel}`}
                     descriptionStyle={{ color: statusColor }}
-                    right={() => deal.status === 'pending'
-                      ? <IconButton icon="shuffle-variant" onPress={() => redealOne(typeof deal.user === 'object' ? deal.user._id : deal.user as string)} />
-                      : null
-                    }
+                    right={() => (
+                      <View style={{ flexDirection: 'row' }}>
+                        {(deal.status === 'pending' || deal.status === 'locked') && (
+                          <IconButton icon="shuffle-variant" onPress={() => redealOne(typeof deal.user === 'object' ? deal.user._id : deal.user as string)} />
+                        )}
+                        {deal.status === 'played' && (
+                          <IconButton icon="restore" onPress={() => resetOne(deal._id)} />
+                        )}
+                      </View>
+                    )}
                   />
                 );
               })}

@@ -259,10 +259,10 @@ export async function applyCardEffects(season: string): Promise<{ matchdaysProce
     const config = await CardConfig.findOne({ group: group._id, season });
     if (!config || config.enabledCards.length === 0) continue;
 
-    // Find matchdays that are fully finished (all matches done)
     const allMatchdays = await Match.find({ competition: 'la_liga', season, matchday: { $ne: null } })
       .select('matchday status');
 
+    // Build matchday status map
     const matchdayStatus = new Map<number, { total: number; finished: number }>();
     for (const m of allMatchdays) {
       const day = m.matchday!;
@@ -272,30 +272,39 @@ export async function applyCardEffects(season: string): Promise<{ matchdaysProce
       matchdayStatus.set(day, entry);
     }
 
-    const completedMatchdays = [...matchdayStatus.entries()]
-      .filter(([, s]) => s.total > 0 && s.total === s.finished)
+    // Matchdays with at least one finished match (for match-level cards)
+    const matchdaysWithFinished = [...matchdayStatus.entries()]
+      .filter(([, s]) => s.finished > 0)
       .map(([day]) => day);
 
-    for (const matchday of completedMatchdays) {
+    // Matchdays fully finished (required for La Afición which needs full matchday ranking)
+    const completedMatchdays = new Set(
+      [...matchdayStatus.entries()]
+        .filter(([, s]) => s.total > 0 && s.total === s.finished)
+        .map(([day]) => day)
+    );
+
+    for (const matchday of matchdaysWithFinished) {
       const matches = await Match.find({ competition: 'la_liga', season, matchday, status: 'finished' });
       const { matchEffects, aficionPlays } = await loadMatchdayCardPlays(group._id as Types.ObjectId, season, matchday);
 
-      // Apply match-level effects (Mina, Roja, Lesión, Autobús, Doblete)
+      // Match-level effects (Mina, Roja, Lesión, Autobús, Doblete) — applied as each match finishes
       for (const match of matches) {
         const effects = matchEffects.get(match._id.toString());
         if (!effects) continue;
         await applyMatchEffects(group._id as Types.ObjectId, match, effects);
       }
 
-      // Me la Juego CardEffects
+      // Me la Juego resolves per-match, also doesn't need full matchday
       const allMelaJuego = [...matchEffects.values()].flatMap((e) => e.melaJuegoPlays);
       await processMelaJuego(group._id as Types.ObjectId, season, matchday, matches, allMelaJuego);
 
-      // La Afición (needs post-effect ranking)
-      const memberIds = group.members.map((m) => m.toString());
-      await processLaAficion(group._id as Types.ObjectId, season, matchday, memberIds, aficionPlays);
-
-      matchdaysProcessed++;
+      // La Afición needs the full post-effect ranking, so only runs when matchday is complete
+      if (completedMatchdays.has(matchday)) {
+        const memberIds = group.members.map((m) => m.toString());
+        await processLaAficion(group._id as Types.ObjectId, season, matchday, memberIds, aficionPlays);
+        matchdaysProcessed++;
+      }
     }
   }
 
