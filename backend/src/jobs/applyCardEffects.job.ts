@@ -144,9 +144,15 @@ async function applyMatchEffects(
       // Immune + guaranteed 1 pt minimum
       finalPoints = Math.max(preCard, 1);
     } else {
-      // Check if Mina applies (user prediction matches a mina's score, user is not the mina owner)
+      // Mina only explodes if the owner's prediction matched the real result
       const hitByMina = effects.minaPlays.some(
-        (m) => m.ownerId !== userId && m.home >= 0 && m.home === pred.predictedHome && m.away === pred.predictedAway
+        (m) =>
+          m.ownerId !== userId &&
+          m.home >= 0 &&
+          m.home === pred.predictedHome &&
+          m.away === pred.predictedAway &&
+          m.home === match.homeScore! &&
+          m.away === match.awayScore!
       );
 
       const hitByRoja = effects.rojaTargets.has(userId);

@@ -36,7 +36,7 @@ export const CARD_EMOJI: Record<CardKey, string> = {
 };
 
 export const CARD_DESCRIPTIONS: Record<CardKey, string> = {
-  la_mina: 'Quienes coincidan con tu resultado ese partido puntúan 0.',
+  la_mina: 'Si aciertas el resultado, quienes hayan predicho lo mismo puntúan 0.',
   la_roja: 'Un rival pierde sus puntos en un partido.',
   la_lesion: 'Un rival obtiene la mitad de puntos en un partido.',
   el_var: 'Si fallas el resultado exacto por un solo gol en un lado (y el otro lo aciertas), cuenta como resultado exacto.',
