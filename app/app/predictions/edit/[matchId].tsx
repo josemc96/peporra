@@ -15,10 +15,11 @@ function formatDate(iso: string): string {
 }
 
 export default function EditPredictionScreen() {
-  const { matchId, season, homeTeam, awayTeam, startTime, currentHome, currentAway, homeCrest, awayCrest } =
+  const { matchId, season, groupId, homeTeam, awayTeam, startTime, currentHome, currentAway, homeCrest, awayCrest } =
     useLocalSearchParams<{
       matchId: string;
       season: string;
+      groupId: string;
       homeTeam: string;
       awayTeam: string;
       startTime: string;
@@ -37,10 +38,10 @@ export default function EditPredictionScreen() {
     mutationFn: () => {
       const home = parseInt(homeScore, 10);
       const away = parseInt(awayScore, 10);
-      return predictionsApi.upsert(matchId, home, away);
+      return predictionsApi.upsert(matchId, groupId, home, away);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['predictions', season] });
+      queryClient.invalidateQueries({ queryKey: ['predictions', season, groupId] });
       if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
     },
     onError: (err) => {

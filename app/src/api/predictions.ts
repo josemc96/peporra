@@ -30,14 +30,14 @@ export const predictionsApi = {
   listMatches: (season: string) =>
     apiFetch<{ matches: Match[] }>(`/matches?season=${encodeURIComponent(season)}`).then((r) => r.matches),
 
-  listMyPredictions: (season: string) =>
-    apiFetch<{ predictions: Prediction[] }>(`/predictions?season=${encodeURIComponent(season)}`).then(
-      (r) => r.predictions
-    ),
+  listMyPredictions: (season: string, groupId: string) =>
+    apiFetch<{ predictions: Prediction[] }>(
+      `/predictions?season=${encodeURIComponent(season)}&groupId=${encodeURIComponent(groupId)}`
+    ).then((r) => r.predictions),
 
-  upsert: (matchId: string, predictedHome: number, predictedAway: number) =>
+  upsert: (matchId: string, groupId: string, predictedHome: number, predictedAway: number) =>
     apiFetch<{ prediction: Prediction }>('/predictions', {
       method: 'PUT',
-      body: JSON.stringify({ matchId, predictedHome, predictedAway }),
+      body: JSON.stringify({ matchId, groupId, predictedHome, predictedAway }),
     }).then((r) => r.prediction),
 };

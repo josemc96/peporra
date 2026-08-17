@@ -126,7 +126,7 @@ function MatchCard({ match, prediction, qualifierPrediction, season, locked }: M
 }
 
 export default function KnockoutScreen() {
-  const { season } = useLocalSearchParams<{ season: string }>();
+  const { season, groupId } = useLocalSearchParams<{ season: string; groupId: string }>();
 
   const { data: matches, isLoading: matchesLoading } = useQuery({
     queryKey: ['knockout-matches', season],
@@ -134,9 +134,9 @@ export default function KnockoutScreen() {
   });
 
   const { data: predictions, isLoading: predLoading } = useQuery({
-    queryKey: ['predictions', season],
-    queryFn: () => predictionsApi.listMyPredictions(season),
-    enabled: !!matches && matches.length > 0,
+    queryKey: ['predictions', season, groupId],
+    queryFn: () => predictionsApi.listMyPredictions(season, groupId ?? ''),
+    enabled: !!matches && matches.length > 0 && !!groupId,
   });
 
   const { data: qualifiers, isLoading: qualLoading } = useQuery({

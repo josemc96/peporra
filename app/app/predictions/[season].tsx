@@ -52,6 +52,7 @@ function MatchCard({
       params: {
         matchId: match._id,
         season,
+        groupId,
         homeTeam: match.homeTeam,
         awayTeam: match.awayTeam,
         startTime: match.startTime,
@@ -144,8 +145,9 @@ export default function PredictionsScreen() {
   });
 
   const { data: predictions, isLoading: loadingPredictions } = useQuery({
-    queryKey: ['predictions', season],
-    queryFn: () => predictionsApi.listMyPredictions(season),
+    queryKey: ['predictions', season, groupId],
+    queryFn: () => predictionsApi.listMyPredictions(season, groupId ?? ''),
+    enabled: !!groupId,
   });
 
   const { data: multipliers } = useQuery({

@@ -12,7 +12,8 @@
     "seed:rules": "tsx src/scripts/seedRules.ts",
     "seed:mock-cards": "tsx src/scripts/seedMockCards.ts",
     "finish:mock-cards": "tsx src/scripts/finishMockCards.ts",
-    "seed:past-season": "tsx src/scripts/seedPastSeason.ts"
+    "seed:past-season": "tsx src/scripts/seedPastSeason.ts",
+    "migrate:predictions-to-group": "tsx src/scripts/migratePredictionsToGroup.ts"
   },
   "keywords": [],
   "author": "",
