@@ -28,7 +28,7 @@ export async function getMatchPredictionVisibility(req: Request, res: Response):
   // ── Before kickoff: only reveal who has predicted, not what ──────────────
   // Exception: rueda_prensa plays force-reveal a specific user's prediction
   if (now < kickoff) {
-    const predictions = await Prediction.find({ match: matchId, user: { $in: memberIds } }).select('user predictedHome predictedAway');
+    const predictions = await Prediction.find({ match: matchId, group: groupId, user: { $in: memberIds } }).select('user predictedHome predictedAway');
     const predictedUserIds = new Set(predictions.map((p) => p.user.toString()));
     const predByUser = new Map(predictions.map((p) => [p.user.toString(), p]));
 
@@ -66,7 +66,7 @@ export async function getMatchPredictionVisibility(req: Request, res: Response):
   }
 
   // ── After kickoff: reveal predictions grouped by result ──────────────────
-  const predictions = await Prediction.find({ match: matchId, user: { $in: memberIds } }).select('user predictedHome predictedAway');
+  const predictions = await Prediction.find({ match: matchId, group: groupId, user: { $in: memberIds } }).select('user predictedHome predictedAway');
   const predictedUserIds = new Set(predictions.map((p) => p.user.toString()));
   const noPrediction = memberIds
     .filter((id) => !predictedUserIds.has(id))
