@@ -85,7 +85,7 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
   const exactScores = new Map<string, number>(memberIds.map((id) => [id, 0]));
 
   if (matchIds.length) {
-    const predictions = await Prediction.find({ match: { $in: matchIds } }).select('_id user predictedHome predictedAway match');
+    const predictions = await Prediction.find({ match: { $in: matchIds }, group: groupId }).select('_id user predictedHome predictedAway match');
     const predUserMap = new Map(predictions.map((p) => [p._id.toString(), p.user.toString()]));
 
     const scores = await PredictionScore.find({
