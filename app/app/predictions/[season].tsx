@@ -46,6 +46,13 @@ function MatchCard({
   const isLocked = new Date() >= new Date(match.startTime);
   const hasPrediction = prediction !== undefined;
 
+  function sign(h: number, a: number) { return h > a ? 1 : h < a ? -1 : 0; }
+  const isFinished = match.status === 'finished';
+  const signOk = isFinished && hasPrediction && match.homeScore != null && match.awayScore != null
+    ? sign(prediction.predictedHome, prediction.predictedAway) === sign(match.homeScore, match.awayScore)
+    : null;
+  const predTextColor = signOk === false ? '#EF4444' : '#22C55E';
+
   function openEditor() {
     router.push({
       pathname: '/predictions/edit/[matchId]',
@@ -122,7 +129,7 @@ function MatchCard({
               {hasPrediction ? 'Editar' : 'Predecir'}
             </Button>
           ) : hasPrediction ? (
-            <Text variant="bodySmall" style={styles.predictionText}>
+            <Text variant="bodySmall" style={[styles.predictionText, { color: predTextColor }]}>
               Tu predicción: {prediction.predictedHome} - {prediction.predictedAway}
             </Text>
           ) : (

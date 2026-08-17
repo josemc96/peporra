@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { PeporraTheme, colors } from '@/config/theme';
 import { CurrentGroupProvider } from '@/context/CurrentGroupContext';
 import { queryClient } from '@/config/queryClient';
+import { BottomNavBar } from '@/components/BottomNavBar';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -74,13 +75,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   const inTabs = segments[0] === '(tabs)';
+  const showNavBar = !!user && segments[0] !== 'login' && segments[0] !== 'register';
 
   if (!user && inTabs) return <Redirect href="/login" />;
   if (user && !inTabs && (segments[0] === 'login' || segments[0] === 'register')) {
     return <Redirect href="/(tabs)" />;
   }
 
-  return <>{children}</>;
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>{children}</View>
+      {showNavBar && <BottomNavBar />}
+    </View>
+  );
 }
 
 function RootLayoutNav() {

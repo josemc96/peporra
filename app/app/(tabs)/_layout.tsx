@@ -29,15 +29,10 @@ export default function TabLayout() {
     headerStyle: { backgroundColor: theme.colors.surface },
     headerTintColor: theme.colors.onSurface,
     headerShadowVisible: false,
-    tabBarActiveTintColor: theme.colors.primary,
-    tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
-    tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.outline },
+    tabBarStyle: { display: 'none' as const },
   }), [
     theme.colors.surface,
     theme.colors.onSurface,
-    theme.colors.primary,
-    theme.colors.onSurfaceVariant,
-    theme.colors.outline,
   ]);
 
   const indexOptions = useMemo(() => ({
