@@ -16,6 +16,7 @@ import { scoreMatchPredictions } from '../jobs/scoreMatchPredictions.job';
 import { scoreQualifierPredictions } from '../jobs/scoreQualifierPredictions.job';
 import { scoreStandingsPredictions } from '../jobs/scoreStandingsPredictions.job';
 import { scoreAwardPredictions } from '../jobs/scoreAwardPredictions.job';
+import { applyCardEffects } from '../jobs/applyCardEffects.job';
 
 export async function getGroupRuleSettings(req: Request, res: Response): Promise<void> {
   const groupId = req.params.groupId as string;
@@ -139,13 +140,14 @@ export async function recalculateGroupScores(req: Request, res: Response): Promi
     await AwardPrediction.updateMany({ _id: { $in: awardPredIds } }, { $set: { status: 'pending' } });
   }
 
-  // Re-run all scoring jobs
-  const [matchRes, qualRes, standingsRes, awardRes] = await Promise.all([
-    scoreMatchPredictions(),
-    scoreQualifierPredictions(),
-    scoreStandingsPredictions(season),
-    scoreAwardPredictions(season),
-  ]);
+  // Re-run all scoring jobs (sequentially so card effects see final base scores)
+  const matchRes = await scoreMatchPredictions();
+  const qualRes = await scoreQualifierPredictions();
+  const standingsRes = await scoreStandingsPredictions(season);
+  const awardRes = await scoreAwardPredictions(season);
+
+  // Re-apply card effects on top of the recalculated base scores
+  await applyCardEffects(season);
 
   res.json({
     ok: true,
