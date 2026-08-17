@@ -40,7 +40,7 @@ export async function getGroupRanking(req: Request, res: Response): Promise<void
   const seasonMatches = await Match.find({ season }).select('_id homeScore awayScore status');
   const seasonMatchIds = seasonMatches.map((m) => m._id);
 
-  const predictions = await Prediction.find({ match: { $in: seasonMatchIds } }).select('_id user match predictedHome predictedAway');
+  const predictions = await Prediction.find({ match: { $in: seasonMatchIds }, group: groupId }).select('_id user match predictedHome predictedAway');
   const predictionUserById = new Map(predictions.map((p) => [p._id.toString(), p.user]));
   const predictionScores = await PredictionScore.find({
     group: groupId,
