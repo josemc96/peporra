@@ -8,5 +8,6 @@ router.use(requireAuth);
 
 router.get('/', controller.getGroupRuleSettings);
 router.put('/', controller.updateGroupRuleSettings);
+router.post('/recalculate', controller.recalculateGroupScores);
 
 export default router;

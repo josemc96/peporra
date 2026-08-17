@@ -61,4 +61,10 @@ export const adminGroupApi = {
 
   deleteMultiplier: (groupId: string, multiplierId: string) =>
     apiFetch<void>(`/groups/${groupId}/multipliers/${multiplierId}`, { method: 'DELETE' }),
+
+  recalculateScores: (groupId: string, season: string) =>
+    apiFetch<{ ok: boolean; scored: { predictions: number; qualifiers: number; standings: number; awards: number } }>(
+      `/groups/${groupId}/rule-settings/recalculate`,
+      { method: 'POST', body: JSON.stringify({ season }) }
+    ),
 };

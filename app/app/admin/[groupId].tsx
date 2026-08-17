@@ -172,6 +172,13 @@ export default function AdminPanelScreen() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['rule-settings', groupId, season] }); setRulesSaved(true); },
   });
 
+  const [recalcScoresMsg, setRecalcScoresMsg] = useState<string | null>(null);
+  const { mutate: recalcScores, isPending: recalcScoresInProgress } = useMutation({
+    mutationFn: () => adminGroupApi.recalculateScores(groupId, season),
+    onSuccess: (data) => setRecalcScoresMsg(`✓ Recalculado — ${data.scored.predictions} predicciones, ${data.scored.standings} clasificaciones, ${data.scored.awards} premios`),
+    onError: () => setRecalcScoresMsg('Error al recalcular'),
+  });
+
   function patchRule(key: string, patch: { points?: number; active?: boolean }) {
     setLocalRules((prev) => (prev ?? []).map((r) => r.rule.key === key ? { ...r, ...patch } : r));
     setRulesSaved(false);
@@ -478,6 +485,23 @@ export default function AdminPanelScreen() {
                 Guardar configuración
               </Button>
             </View>
+
+            <Divider style={styles.divider} />
+
+            <Button
+              mode="outlined"
+              icon="calculator"
+              onPress={() => { setRecalcScoresMsg(null); recalcScores(); }}
+              loading={recalcScoresInProgress}
+              disabled={recalcScoresInProgress}
+            >
+              Recalcular puntuación
+            </Button>
+            {recalcScoresMsg && (
+              <Text variant="labelSmall" style={{ color: theme.colors.primary, textAlign: 'center' }}>
+                {recalcScoresMsg}
+              </Text>
+            )}
           </>
         )
       )}

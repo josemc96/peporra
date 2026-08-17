@@ -1,8 +1,21 @@
 import { Request, Response } from 'express';
+import { Types } from 'mongoose';
 import { GroupRuleSettings } from '../models/GroupRuleSettings';
+import { Group } from '../models/Group';
 import { Rule } from '../models/Rule';
+import { Match } from '../models/Match';
+import { Prediction } from '../models/Prediction';
+import { QualifierPrediction } from '../models/QualifierPrediction';
+import { StandingsPrediction } from '../models/StandingsPrediction';
+import { StandingsPredictionScore } from '../models/StandingsPredictionScore';
+import { AwardPrediction } from '../models/AwardPrediction';
+import { AwardPredictionScore } from '../models/AwardPredictionScore';
 import { AppError } from '../utils/AppError';
 import { requireGroupAdmin, requireGroupMember } from '../services/groupAuth.service';
+import { scoreMatchPredictions } from '../jobs/scoreMatchPredictions.job';
+import { scoreQualifierPredictions } from '../jobs/scoreQualifierPredictions.job';
+import { scoreStandingsPredictions } from '../jobs/scoreStandingsPredictions.job';
+import { scoreAwardPredictions } from '../jobs/scoreAwardPredictions.job';
 
 export async function getGroupRuleSettings(req: Request, res: Response): Promise<void> {
   const groupId = req.params.groupId as string;
@@ -89,4 +102,58 @@ export async function updateGroupRuleSettings(req: Request, res: Response): Prom
 
   await settings.save();
   res.json({ settings });
+}
+
+export async function recalculateGroupScores(req: Request, res: Response): Promise<void> {
+  const groupId = req.params.groupId as string;
+  const { season } = req.body as { season?: string };
+  if (!season) throw new AppError('season es obligatorio', 400);
+
+  const group = await requireGroupAdmin(groupId, req.user!.id);
+  const memberIds = group.members.map((m) => m.toString());
+
+  // Reset match & qualifier predictions for this group
+  const finishedMatchIds = (await Match.find({ season, status: 'finished' }).select('_id')).map((m) => m._id);
+
+  await Prediction.updateMany(
+    { group: new Types.ObjectId(groupId), match: { $in: finishedMatchIds } },
+    { $set: { status: 'pending' } }
+  );
+
+  await QualifierPrediction.updateMany(
+    { group: new Types.ObjectId(groupId), match: { $in: finishedMatchIds } },
+    { $set: { status: 'pending' } }
+  );
+
+  // Reset standings & award predictions for this group's members
+  // (these don't have a group field — scores do, so delete scores and reset status)
+  const standingsPredIds = (await StandingsPrediction.find({ user: { $in: memberIds }, season }).select('_id')).map((p) => p._id);
+  if (standingsPredIds.length) {
+    await StandingsPredictionScore.deleteMany({ group: new Types.ObjectId(groupId), standingsPrediction: { $in: standingsPredIds } });
+    await StandingsPrediction.updateMany({ _id: { $in: standingsPredIds } }, { $set: { status: 'pending' } });
+  }
+
+  const awardPredIds = (await AwardPrediction.find({ user: { $in: memberIds }, season }).select('_id')).map((p) => p._id);
+  if (awardPredIds.length) {
+    await AwardPredictionScore.deleteMany({ group: new Types.ObjectId(groupId), awardPrediction: { $in: awardPredIds } });
+    await AwardPrediction.updateMany({ _id: { $in: awardPredIds } }, { $set: { status: 'pending' } });
+  }
+
+  // Re-run all scoring jobs
+  const [matchRes, qualRes, standingsRes, awardRes] = await Promise.all([
+    scoreMatchPredictions(),
+    scoreQualifierPredictions(),
+    scoreStandingsPredictions(season),
+    scoreAwardPredictions(season),
+  ]);
+
+  res.json({
+    ok: true,
+    scored: {
+      predictions: matchRes.predictionsScored,
+      qualifiers: qualRes.predictionsScored,
+      standings: standingsRes.predictionsScored,
+      awards: awardRes.predictionsScored,
+    },
+  });
 }
