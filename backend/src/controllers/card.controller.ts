@@ -7,6 +7,7 @@ import { Match } from '../models/Match';
 import { AppError } from '../utils/AppError';
 import { requireGroupMember, requireGroupAdmin } from '../services/groupAuth.service';
 import { dealCards } from '../jobs/dealCards.job';
+import { applyCardEffects } from '../jobs/applyCardEffects.job';
 import { ALL_CARD_KEYS, CardKey } from '../types/enums';
 
 function pickRandom<T>(arr: T[]): T {
@@ -193,6 +194,17 @@ export async function unlockCard(req: Request, res: Response): Promise<void> {
   await deal.save();
 
   res.json({ deal });
+}
+
+export async function recalculateCardEffects(req: Request, res: Response): Promise<void> {
+  const groupId = req.params.groupId as string;
+  const { season } = req.body as { season?: string };
+  if (!season) throw new AppError('season es obligatorio', 400);
+
+  await requireGroupAdmin(groupId, req.user!.id);
+
+  const result = await applyCardEffects(season);
+  res.json({ ok: true, ...result });
 }
 
 export async function resetDeal(req: Request, res: Response): Promise<void> {

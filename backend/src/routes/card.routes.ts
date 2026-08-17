@@ -4,6 +4,7 @@ import {
   getCardConfig, updateCardConfig,
   getMyDeal, getAllDeals, triggerDeal,
   redealUser, redealAll, resetDeal, unlockCard,
+  recalculateCardEffects,
 } from '../controllers/card.controller';
 import { playCard, spyMatch, getActiveCardPlays } from '../controllers/cardPlay.controller';
 
@@ -21,9 +22,10 @@ router.get('/deals',   getAllDeals);
 router.post('/deal',   triggerDeal);
 
 // Redeal / reset
-router.post('/redeal',     redealUser);
-router.post('/redeal-all', redealAll);
-router.post('/reset',      resetDeal);
+router.post('/redeal',       redealUser);
+router.post('/redeal-all',   redealAll);
+router.post('/reset',        resetDeal);
+router.post('/recalculate',  recalculateCardEffects);
 
 // Unlock
 router.post('/unlock',         unlockCard);

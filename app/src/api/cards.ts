@@ -116,6 +116,9 @@ export const cardsApi = {
   resetDeal: (groupId: string, dealId: string): Promise<{ deal: CardDeal }> =>
     apiFetch(`${base(groupId)}/reset`, json({ dealId })),
 
+  recalculateCardEffects: (groupId: string, season: string): Promise<{ ok: boolean; matchdaysProcessed: number }> =>
+    apiFetch(`${base(groupId)}/recalculate`, json({ season })),
+
   unlockCard: (groupId: string, dealId: string): Promise<{ deal: CardDeal }> =>
     apiFetch(`${base(groupId)}/unlock`, json({ dealId })),
 

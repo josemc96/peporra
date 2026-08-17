@@ -413,6 +413,13 @@ export default function AdminPanelScreen() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['card-deals', groupId, season, cardMatchday] }),
   });
 
+  const [recalcMsg, setRecalcMsg] = useState<string | null>(null);
+  const { mutate: recalcCards, isPending: recalcCardsInProgress } = useMutation({
+    mutationFn: () => cardsApi.recalculateCardEffects(groupId, season),
+    onSuccess: (data) => setRecalcMsg(`✓ Recalculado — ${data.matchdaysProcessed} jornadas procesadas`),
+    onError: () => setRecalcMsg('Error al recalcular'),
+  });
+
   // ── Tabs ───────────────────────────────────────────────────────────────────
   const tabs: Array<{ key: 'rules' | 'multipliers' | 'matches' | 'penalties' | 'adjustments' | 'cards'; label: string }> = [
     { key: 'rules', label: 'Reglas' },
@@ -697,6 +704,26 @@ export default function AdminPanelScreen() {
               </View>
             </>
           )}
+
+          <Divider style={styles.divider} />
+
+          {/* Recalculate card effects */}
+          <Text variant="titleSmall" style={styles.sectionTitle}>Recalcular efectos de cartas</Text>
+          <Text variant="bodySmall" style={styles.compNote}>
+            Vuelve a aplicar los efectos de todas las cartas jugadas esta temporada. Útil si se cambió una regla o hubo algún error.
+          </Text>
+          {recalcMsg && (
+            <Text variant="labelMedium" style={{ color: theme.colors.primary, marginTop: 4 }}>{recalcMsg}</Text>
+          )}
+          <Button
+            mode="outlined"
+            icon="refresh"
+            onPress={() => { setRecalcMsg(null); recalcCards(); }}
+            loading={recalcCardsInProgress}
+            disabled={recalcCardsInProgress}
+          >
+            Recalcular efectos de cartas
+          </Button>
 
           <Divider style={styles.divider} />
 
