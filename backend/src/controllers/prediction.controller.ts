@@ -81,3 +81,26 @@ export async function getPredictionForMatch(req: Request, res: Response): Promis
   const prediction = await Prediction.findOne({ user: req.user!.id, match: req.params.matchId, group: groupId });
   res.json({ prediction: prediction ?? null });
 }
+
+export async function getMyPredictionsAcrossGroups(req: Request, res: Response): Promise<void> {
+  const groups = await Group.find({ members: req.user!.id }).select('_id name');
+
+  const results = await Promise.all(
+    groups.map(async (g) => {
+      const prediction = await Prediction.findOne({
+        user: req.user!.id,
+        match: req.params.matchId,
+        group: g._id,
+      }).select('predictedHome predictedAway');
+      return {
+        groupId: (g._id as import('mongoose').Types.ObjectId).toString(),
+        groupName: g.name,
+        prediction: prediction
+          ? { predictedHome: prediction.predictedHome, predictedAway: prediction.predictedAway }
+          : null,
+      };
+    })
+  );
+
+  res.json({ groups: results });
+}

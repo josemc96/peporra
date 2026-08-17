@@ -40,4 +40,9 @@ export const predictionsApi = {
       method: 'PUT',
       body: JSON.stringify({ matchId, groupId, predictedHome, predictedAway }),
     }).then((r) => r.prediction),
+
+  acrossGroups: (matchId: string) =>
+    apiFetch<{ groups: Array<{ groupId: string; groupName: string; prediction: { predictedHome: number; predictedAway: number } | null }> }>(
+      `/predictions/${encodeURIComponent(matchId)}/all-groups`
+    ).then((r) => r.groups),
 };
