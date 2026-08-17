@@ -13,7 +13,8 @@
     "seed:mock-cards": "tsx src/scripts/seedMockCards.ts",
     "finish:mock-cards": "tsx src/scripts/finishMockCards.ts",
     "seed:past-season": "tsx src/scripts/seedPastSeason.ts",
-    "migrate:predictions-to-group": "tsx src/scripts/migratePredictionsToGroup.ts"
+    "migrate:predictions-to-group": "tsx src/scripts/migratePredictionsToGroup.ts",
+    "migrate:prediction-scores-to-group": "tsx src/scripts/migratePredictionScoresToGroup.ts"
   },
   "keywords": [],
   "author": "",
