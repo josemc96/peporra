@@ -101,6 +101,77 @@ function AwardResultSection({ season }: { season: string }) {
   );
 }
 
+// ─── Manual award prediction ────────────────────────────────────────────────
+
+function ManualAwardPredictionSection({ season }: { season: string }) {
+  const theme = useTheme();
+  const [award, setAward] = useState<Award>('pichichi');
+  const [userEmail, setUserEmail] = useState('');
+  const [playerInput, setPlayerInput] = useState('');
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const { mutate: save, isPending: saving } = useMutation({
+    mutationFn: () => adminGlobalApi.setUserAwardPrediction(userEmail.trim(), season, award, playerInput.trim()),
+    onSuccess: (data) => {
+      setMsg({ text: `✓ Guardado para ${data.userAlias}`, ok: true });
+      setPlayerInput('');
+    },
+    onError: (err) => setMsg({ text: (err as Error).message, ok: false }),
+  });
+
+  return (
+    <>
+      <Text variant="titleMedium" style={styles.sectionTitle}>Predicción manual de usuario</Text>
+      <Text variant="bodySmall" style={styles.sectionNote}>
+        Permite introducir la predicción de Pichichi/Zamora de un usuario aunque la temporada ya haya empezado.
+      </Text>
+
+      <View style={styles.tabRow}>
+        <Chip selected={award === 'pichichi'} onPress={() => { setAward('pichichi'); setMsg(null); }} style={{ flex: 1 }}>
+          🏆 Pichichi
+        </Chip>
+        <Chip selected={award === 'zamora'} onPress={() => { setAward('zamora'); setMsg(null); }} style={{ flex: 1 }}>
+          🧤 Zamora
+        </Chip>
+      </View>
+
+      <TextInput
+        label="Email del usuario"
+        value={userEmail}
+        onChangeText={(t) => { setUserEmail(t); setMsg(null); }}
+        mode="outlined"
+        dense
+        autoCorrect={false}
+        autoCapitalize="none"
+        keyboardType="email-address"
+      />
+      <TextInput
+        label={award === 'pichichi' ? 'Máximo goleador predicho' : 'Portero predicho'}
+        value={playerInput}
+        onChangeText={(t) => { setPlayerInput(t); setMsg(null); }}
+        mode="outlined"
+        dense
+        autoCorrect={false}
+      />
+
+      {msg && (
+        <Text variant="labelSmall" style={{ color: msg.ok ? theme.colors.primary : theme.colors.error }}>
+          {msg.text}
+        </Text>
+      )}
+
+      <Button
+        mode="contained"
+        onPress={() => save()}
+        loading={saving}
+        disabled={saving || userEmail.trim().length === 0 || playerInput.trim().length === 0}
+      >
+        Guardar predicción
+      </Button>
+    </>
+  );
+}
+
 // ─── Action button ──────────────────────────────────────────────────────────
 
 function ActionButton({
@@ -183,6 +254,10 @@ export default function GlobalAdminScreen() {
       <Divider style={styles.divider} />
 
       <AwardResultSection season={season} />
+
+      <Divider style={styles.divider} />
+
+      <ManualAwardPredictionSection season={season} />
 
       <Divider style={styles.divider} />
 

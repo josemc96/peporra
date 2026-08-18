@@ -10,6 +10,7 @@ router.use(requireAuth, requireAdmin);
 router.post('/sync-matches', adminController.triggerMatchSync);
 router.post('/sync-scorers', adminController.triggerScorersSync);
 router.put('/award-results', awardResultController.setAwardResult);
+router.post('/award-predictions/set', adminController.setUserAwardPrediction);
 router.post('/calculate-scores', adminController.triggerCalculateScores);
 
 export default router;

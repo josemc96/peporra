@@ -28,4 +28,10 @@ export const adminGlobalApi = {
 
   syncScorers: () =>
     apiFetch<{ message: string }>('/admin/sync-scorers', { method: 'POST' }),
+
+  setUserAwardPrediction: (userEmail: string, season: string, award: Award, predictedPlayer: string) =>
+    apiFetch<{ prediction: unknown; userAlias: string }>('/admin/award-predictions/set', {
+      method: 'POST',
+      body: JSON.stringify({ userEmail, season, award, predictedPlayer }),
+    }),
 };
