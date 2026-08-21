@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { awardPredictionsApi } from '@/api/awardPredictions';
 import { adminGroupApi } from '@/api/adminGroup';
 import { apiFetch } from '@/api/client';
+import { MatchdaySummarySection } from '@/components/MatchdaySummary';
 
 const AVATAR_COLORS = [
   '#1565C0', '#2E7D32', '#6A1B9A', '#AD1457',
@@ -110,6 +111,10 @@ export default function UserProfileScreen() {
           <StatCard value={position && total ? `${position}/${total}` : '—'} label="Posición" />
         </View>
       </View>
+
+      {groupId && userId && (
+        <MatchdaySummarySection groupId={groupId} userId={userId} season={season} />
+      )}
 
       {/* Apuestas de temporada */}
       {showBets && (pichichi || zamora) && (
