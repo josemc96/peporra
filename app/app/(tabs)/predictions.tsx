@@ -39,6 +39,12 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
   const isLocked = new Date() >= new Date(match.startTime);
   const hasPrediction = prediction !== undefined;
 
+  function sign(h: number, a: number) { return h > a ? 1 : h < a ? -1 : 0; }
+  const signOk = match.status === 'finished' && hasPrediction && match.homeScore != null && match.awayScore != null
+    ? sign(prediction.predictedHome, prediction.predictedAway) === sign(match.homeScore, match.awayScore)
+    : null;
+  const predTextColor = signOk === false ? '#EF4444' : '#22C55E';
+
   function openEditor() {
     router.push({
       pathname: '/predictions/edit/[matchId]',
@@ -99,7 +105,7 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
               {hasPrediction ? 'Editar' : 'Predecir'}
             </Button>
           ) : hasPrediction ? (
-            <Text variant="bodySmall" style={styles.predictionText}>
+            <Text variant="bodySmall" style={[styles.predictionText, { color: predTextColor }]}>
               Tu predicción: {prediction.predictedHome} - {prediction.predictedAway}
             </Text>
           ) : (
@@ -325,6 +331,6 @@ const styles = StyleSheet.create({
   multText: { color: '#000000', fontWeight: '700', fontSize: 12 },
   dateText: { opacity: 0.5, marginTop: 2 },
   predictionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-  predictionText: { color: '#22C55E', fontWeight: '600' },
+  predictionText: { fontWeight: '600' },
   noPrediction: { opacity: 0.4, fontStyle: 'italic' },
 });
