@@ -38,9 +38,12 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
 }) {
   const isLocked = new Date() >= new Date(match.startTime);
   const hasPrediction = prediction !== undefined;
+  const isFinished = match.status === 'finished';
+  const isLive = isLocked && !isFinished;
+  const hasLiveScore = match.homeScore != null && match.awayScore != null;
 
   function sign(h: number, a: number) { return h > a ? 1 : h < a ? -1 : 0; }
-  const signOk = match.status === 'finished' && hasPrediction && match.homeScore != null && match.awayScore != null
+  const signOk = isFinished && hasPrediction && match.homeScore != null && match.awayScore != null
     ? sign(prediction.predictedHome, prediction.predictedAway) === sign(match.homeScore, match.awayScore)
     : null;
   const predTextColor = signOk === false ? '#EF4444' : '#22C55E';
@@ -79,8 +82,10 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
             {match.homeCrest ? <Image source={{ uri: match.homeCrest }} style={styles.crest} /> : null}
             <Text variant="titleSmall" style={styles.team} numberOfLines={1}>{match.homeTeam}</Text>
           </View>
-          {match.status === 'finished' ? (
+          {isFinished ? (
             <Text variant="titleMedium" style={styles.scoreCenter}>{match.homeScore} - {match.awayScore}</Text>
+          ) : isLive && hasLiveScore ? (
+            <Text variant="titleMedium" style={[styles.scoreCenter, styles.liveScore]}>{match.homeScore} - {match.awayScore}</Text>
           ) : isLocked ? (
             <Text variant="labelSmall" style={styles.liveIndicator}>● EN CURSO</Text>
           ) : hasPrediction ? (
@@ -112,6 +117,12 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
             <Text variant="bodySmall" style={styles.noPrediction}>No predijiste</Text>
           )}
         </View>
+        {isLive && (
+          <View style={styles.liveBadge}>
+            <View style={styles.liveDot} />
+            <Text variant="labelSmall" style={styles.liveBadgeText}>EN CURSO</Text>
+          </View>
+        )}
       </Card.Content>
     </Card>
   );
@@ -315,7 +326,7 @@ const styles = StyleSheet.create({
   list: { padding: 12, gap: 10, paddingBottom: 32 },
   emptyText: { textAlign: 'center', opacity: 0.5, marginTop: 40, fontStyle: 'italic' },
   matchCard: { width: '100%' },
-  cardContent: { gap: 4 },
+  cardContent: { gap: 4, position: 'relative' },
   teamsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   teamCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   teamCellRight: { justifyContent: 'flex-end' },
@@ -326,6 +337,13 @@ const styles = StyleSheet.create({
   scoreCenter: { fontWeight: '700', minWidth: 48, textAlign: 'center' },
   predCenter: { fontWeight: '600', minWidth: 48, textAlign: 'center', opacity: 0.75 },
   liveIndicator: { color: '#8892A4', fontWeight: '700', minWidth: 64, textAlign: 'center' },
+  liveScore: { color: '#EF4444' },
+  liveBadge: {
+    position: 'absolute', right: 0, bottom: 0,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+  },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' },
+  liveBadgeText: { color: '#EF4444', fontWeight: '700' },
   predBtn: { marginLeft: -8 },
   multChip: { backgroundColor: '#FFBE0B', height: 24 },
   multText: { color: '#000000', fontWeight: '700', fontSize: 12 },
