@@ -13,6 +13,7 @@ import { awardPredictionsApi } from '@/api/awardPredictions';
 import { standingsPredictionsApi, StandingsPrediction } from '@/api/standingsPredictions';
 import { penaltiesApi } from '@/api/penalties';
 import { apiFetch } from '@/api/client';
+import { MatchdaySummarySection } from '@/components/MatchdaySummary';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -195,6 +196,10 @@ export default function ProfileScreen() {
             </Surface>
           )}
         </View>
+      )}
+
+      {group && user && (
+        <MatchdaySummarySection groupId={groupId} userId={user.id} season={season} />
       )}
 
       {/* Mis apuestas de temporada */}

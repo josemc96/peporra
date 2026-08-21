@@ -16,6 +16,7 @@ import rankingRoutes from './routes/ranking.routes';
 import penaltyRoutes from './routes/penaltyConfig.routes';
 import manualAdjustmentRoutes from './routes/manualAdjustment.routes';
 import cardRoutes from './routes/card.routes';
+import matchdaySummaryRoutes from './routes/matchdaySummary.routes';
 import { getMatchPredictionVisibility } from './controllers/matchPredictionVisibility.controller';
 import { getGroupAwardPredictions } from './controllers/awardPrediction.controller';
 import { isSeasonLocked, isVueltaStarted } from './services/season.service';
@@ -54,6 +55,7 @@ app.use('/api/groups/:groupId/ranking', rankingRoutes);
 app.use('/api/groups/:groupId/penalties', penaltyRoutes);
 app.use('/api/groups/:groupId/adjustments', manualAdjustmentRoutes);
 app.use('/api/groups/:groupId/cards', cardRoutes);
+app.use('/api/groups/:groupId/matchday-summary', matchdaySummaryRoutes);
 app.get('/api/groups/:groupId/matches/:matchId/predictions', requireAuth, getMatchPredictionVisibility);
 app.get('/api/groups/:groupId/award-predictions', requireAuth, getGroupAwardPredictions);
 
