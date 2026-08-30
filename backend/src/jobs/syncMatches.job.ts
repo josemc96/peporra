@@ -13,8 +13,11 @@ function toSeasonStartYear(season: string): string {
   return season.split('-')[0];
 }
 
-function toMatchStatus(apiStatus: FootballDataMatch['status']): MatchStatus {
-  return apiStatus === 'FINISHED' ? 'finished' : 'pending';
+// Solo confirma "finished" cuando la API lo dice; si no, no se incluye el campo en el
+// update (queda `undefined` y Mongoose lo omite del $set) para no pisar un partido que ya
+// se marcó "finished" a mano si football-data.org va con retraso en reflejar el resultado.
+function toMatchStatus(apiStatus: FootballDataMatch['status']): MatchStatus | undefined {
+  return apiStatus === 'FINISHED' ? 'finished' : undefined;
 }
 
 export async function syncLaLigaMatches(season: string): Promise<SyncMatchesResult> {
