@@ -88,23 +88,43 @@ export async function applyMatchdayPenalties(groupIdFilter?: Types.ObjectId): Pr
 
       const points = await computeMatchdayPoints(config.group as Types.ObjectId, config.season, matchday, memberIds);
 
-      // Sort ascending (worst first)
+      // Sort ascending (worst first) — empates quedan contiguos tras ordenar por puntos.
       const ranked = Array.from(points.entries()).sort((a, b) => a[1] - b[1]);
 
+      const amountByPosition = new Map(config.penalties.map((p) => [p.position, p.amount]));
       const maxPosition = Math.max(...config.penalties.map((p) => p.position));
 
-      for (let i = 0; i < Math.min(maxPosition, ranked.length); i++) {
-        const position = i + 1; // 1 = last place
-        const penaltyEntry = config.penalties.find((p) => p.position === position);
-        if (!penaltyEntry || penaltyEntry.amount <= 0) continue;
+      // Se agrupan los empates: todo el bloque empatado ocupa varias posiciones a la vez
+      // (ej. 4 personas empatadas a la peor puntuación ocupan las posiciones 2-5) y cobra
+      // la penalización MÁS ALTA de entre las posiciones que ocupa en conjunto — nadie del
+      // bloque se libra de la penalización más dura solo por cómo caiga el empate.
+      let cursor = 0;
+      while (cursor < ranked.length) {
+        const groupPoints = ranked[cursor][1];
+        let end = cursor;
+        while (end < ranked.length && ranked[end][1] === groupPoints) end++;
 
-        const [userId] = ranked[i];
+        const startPosition = cursor + 1; // 1 = último puesto
+        if (startPosition > maxPosition) break; // ya no quedan posiciones configuradas
 
-        await MatchdayPenalty.findOneAndUpdate(
-          { group: config.group, season: config.season, matchday, user: userId },
-          { group: config.group, season: config.season, matchday, user: userId, position, amount: penaltyEntry.amount },
-          { upsert: true }
-        );
+        let amount = 0;
+        for (let position = startPosition; position <= end; position++) {
+          const a = amountByPosition.get(position);
+          if (a != null && a > amount) amount = a;
+        }
+
+        if (amount > 0) {
+          for (let i = cursor; i < end; i++) {
+            const [userId] = ranked[i];
+            await MatchdayPenalty.findOneAndUpdate(
+              { group: config.group, season: config.season, matchday, user: userId },
+              { group: config.group, season: config.season, matchday, user: userId, position: startPosition, amount },
+              { upsert: true }
+            );
+          }
+        }
+
+        cursor = end;
       }
     }
   }
