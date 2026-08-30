@@ -122,13 +122,13 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
           ) : (
             <Text variant="bodySmall" style={styles.noPrediction}>No predijiste</Text>
           )}
+          {isLive && (
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
+              <Text variant="labelSmall" style={styles.liveBadgeText}>EN CURSO</Text>
+            </View>
+          )}
         </View>
-        {isLive && (
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text variant="labelSmall" style={styles.liveBadgeText}>EN CURSO</Text>
-          </View>
-        )}
       </Card.Content>
     </Card>
   );
@@ -321,16 +321,11 @@ export default function PredictionsTab() {
         </View>
       )}
 
-      {/* Ir a jornada (modo "Todos") / Título de jornada + Volver (modo filtrado) — solo La Liga */}
+      {/* Ir a jornada / título+volver, y banner de carta — todo en una sola fila (solo La Liga) */}
       {competitionTab === 'la_liga' && (
         <View style={styles.jornadaBar}>
           {filterMatchday != null ? (
-            <>
-              <Text variant="titleMedium" style={styles.matchdayTitle}>Jornada {filterMatchday}</Text>
-              <Button mode="text" compact icon="arrow-left" onPress={clearFilter}>
-                Volver
-              </Button>
-            </>
+            <Text variant="titleMedium" style={styles.matchdayTitle}>Jornada {filterMatchday}</Text>
           ) : (
             <Menu
               visible={jornadaMenuVisible}
@@ -352,25 +347,30 @@ export default function PredictionsTab() {
               </ScrollView>
             </Menu>
           )}
-        </View>
-      )}
 
-      {/* Banner carta de jornada (solo La Liga): la jornada filtrada, o si no la más cercana */}
-      {competitionTab === 'la_liga' && activeMatchday != null && groupId && myDeal?.deal && myDeal.deal.status !== 'expired' && (
-        <Button
-          mode={myDeal.deal.status === 'pending' || myDeal.deal.status === 'locked' ? 'contained-tonal' : 'text'}
-          compact icon={myDeal.deal.status === 'locked' ? 'lock' : 'cards-playing'}
-          onPress={() => router.push({
-            pathname: '/cards/[groupId]' as never,
-            params: { groupId, season, matchday: String(activeMatchday) },
-          })}
-          style={styles.cardBanner}
-        >
-          {myDeal.deal.status === 'locked'
-            ? '🔒 Carta bloqueada · Desbloquear'
-            : `${CARD_EMOJI[myDeal.deal.card]} ${CARD_LABELS[myDeal.deal.card]}${myDeal.deal.status === 'pending' ? ' · Jugar' : ' · Jugada'}`
-          }
-        </Button>
+          {activeMatchday != null && groupId && myDeal?.deal && myDeal.deal.status !== 'expired' && (
+            <Button
+              mode="contained-tonal"
+              compact icon={myDeal.deal.status === 'locked' ? 'lock' : 'cards-playing'}
+              onPress={() => router.push({
+                pathname: '/cards/[groupId]' as never,
+                params: { groupId, season, matchday: String(activeMatchday) },
+              })}
+              style={filterMatchday == null ? styles.cardBannerPushRight : styles.cardBanner}
+            >
+              {myDeal.deal.status === 'locked'
+                ? '🔒 Carta bloqueada · Desbloquear'
+                : `${CARD_EMOJI[myDeal.deal.card]} ${CARD_LABELS[myDeal.deal.card]}${myDeal.deal.status === 'pending' ? ' · Jugar' : ' · Jugada'}`
+              }
+            </Button>
+          )}
+
+          {filterMatchday != null && (
+            <Button mode="text" compact icon="arrow-left" onPress={clearFilter} style={styles.volverBtn}>
+              Volver
+            </Button>
+          )}
+        </View>
       )}
 
       {showAllView ? (
@@ -381,7 +381,13 @@ export default function PredictionsTab() {
           stickySectionHeadersEnabled
           renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeader}>
-              <Text variant="labelLarge" style={styles.sectionHeaderText}>{section.title}</Text>
+              <Text
+                variant="labelLarge"
+                style={styles.sectionHeaderText}
+                onPress={() => selectJornada(section.matchday)}
+              >
+                {section.title}
+              </Text>
             </View>
           )}
           renderItem={({ item }) => (
@@ -444,18 +450,20 @@ const styles = StyleSheet.create({
   },
 
   jornadaBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4,
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+    paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8,
   },
   matchdayTitle: { fontWeight: '700' },
   jornadaMenuBtnContent: { flexDirection: 'row-reverse' },
   jornadaMenuScroll: { maxHeight: 360 },
+  volverBtn: { marginLeft: 'auto' },
   sectionHeader: {
     backgroundColor: colors.bg, paddingHorizontal: 4, paddingTop: 14, paddingBottom: 6,
   },
-  sectionHeaderText: { fontWeight: '700', color: colors.text2 },
+  sectionHeaderText: { fontWeight: '700', color: colors.primary },
 
-  cardBanner: { marginHorizontal: 8, marginVertical: 4 },
+  cardBanner: {},
+  cardBannerPushRight: { marginLeft: 'auto' },
   list: { padding: 12, gap: 10, paddingBottom: 32 },
   emptyText: { textAlign: 'center', opacity: 0.5, marginTop: 40, fontStyle: 'italic' },
   matchCard: { width: '100%' },
@@ -471,10 +479,7 @@ const styles = StyleSheet.create({
   predCenter: { fontWeight: '600', minWidth: 48, textAlign: 'center', opacity: 0.75 },
   liveIndicator: { color: '#8892A4', fontWeight: '700', minWidth: 64, textAlign: 'center' },
   liveScore: { color: '#EF4444' },
-  liveBadge: {
-    position: 'absolute', right: 0, bottom: 0,
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-  },
+  liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' },
   liveBadgeText: { color: '#EF4444', fontWeight: '700' },
   predBtn: { marginLeft: -8 },
