@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Image, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, Image, ScrollView, SectionList, StyleSheet, View } from 'react-native';
 import {
-  ActivityIndicator, Button, Card, Chip, IconButton,
-  SegmentedButtons, Text,
+  ActivityIndicator, Button, Card, Chip,
+  Menu, SegmentedButtons, Text,
 } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -14,6 +14,12 @@ import { useCurrentGroup } from '@/context/CurrentGroupContext';
 import { colors } from '@/config/theme';
 
 type Competition = 'la_liga' | 'copa_del_rey' | 'supercopa';
+
+interface MatchdaySection {
+  title: string;
+  matchday: number;
+  data: Match[];
+}
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -132,8 +138,18 @@ export default function PredictionsTab() {
   const { group } = useCurrentGroup();
   const groupId = group?.id ?? '';
   const season = group?.season ?? '';
-  const [selectedMatchday, setSelectedMatchday] = useState<number>(1);
   const [competitionTab, setCompetitionTab] = useState<Competition>('la_liga');
+  // null = viendo todos los partidos en orden cronológico; un número = filtrado a esa jornada.
+  const [filterMatchday, setFilterMatchday] = useState<number | null>(null);
+  const [jornadaMenuVisible, setJornadaMenuVisible] = useState(false);
+  const sectionListRef = useRef<SectionList<Match, MatchdaySection>>(null);
+  const hasAutoScrolled = useRef(false);
+  const lastScrollTarget = useRef<{ sectionIndex: number; itemIndex: number } | null>(null);
+
+  function scrollToTarget(target: { sectionIndex: number; itemIndex: number }, animated: boolean) {
+    lastScrollTarget.current = target;
+    sectionListRef.current?.scrollToLocation({ ...target, animated, viewPosition: 0.15, viewOffset: 0 });
+  }
 
   const { data: matches, isLoading: loadingMatches } = useQuery({
     queryKey: ['matches', season],
@@ -159,12 +175,6 @@ export default function PredictionsTab() {
     queryFn: () => adminGroupApi.getRuleSettings(groupId, season),
     enabled: !!groupId,
     staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: myDeal } = useQuery({
-    queryKey: ['my-deal', groupId, season, selectedMatchday],
-    queryFn: () => cardsApi.getMyDeal(groupId, season, selectedMatchday),
-    enabled: !!groupId && selectedMatchday > 0 && competitionTab === 'la_liga',
   });
 
   const enabledCompetitions = settings?.enabledCompetitions ?? [];
@@ -198,31 +208,99 @@ export default function PredictionsTab() {
     ].sort((a, b) => a - b);
   }, [matches]);
 
-  useEffect(() => {
-    if (!matches || matchdays.length === 0) return;
-    const now = new Date();
-    const firstPending = matchdays.find((day) =>
-      matches.some((m) => m.matchday === day && new Date(m.startTime) > now)
-    );
-    setSelectedMatchday(firstPending ?? matchdays[matchdays.length - 1]);
-  }, [matches, matchdays]);
-
   const predictionMap = useMemo(() => {
     const map = new Map<string, Prediction>();
     predictions?.forEach((p) => map.set(p.match._id, p));
     return map;
   }, [predictions]);
 
+  // Todos los partidos de La Liga ordenados por fecha real de inicio (no por jornada) —
+  // así un partido adelantado o aplazado aparece donde de verdad se juega, sin perderse.
+  const sortedLaLigaMatches = useMemo(() => {
+    if (!matches) return [];
+    return matches
+      .filter((m) => m.competition === 'la_liga' && m.matchday != null)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [matches]);
+
+  // Se agrupan en secciones consecutivas por jornada (no por jornada completa): si un
+  // partido de la jornada 5 se adelanta antes que el resto de la 4, aparece como su propia
+  // sección "Jornada 5" en medio, y luego vuelve "Jornada 4" con el resto — nada se salta.
+  const sections = useMemo<MatchdaySection[]>(() => {
+    const result: MatchdaySection[] = [];
+    for (const match of sortedLaLigaMatches) {
+      const last = result[result.length - 1];
+      if (last && last.matchday === match.matchday) {
+        last.data.push(match);
+      } else {
+        result.push({ title: `Jornada ${match.matchday}`, matchday: match.matchday!, data: [match] });
+      }
+    }
+    return result;
+  }, [sortedLaLigaMatches]);
+
+  // Punto de partida al abrir la pestaña: el partido más cercano a empezar (o el último
+  // jugado si la temporada ya terminó), como sectionIndex/itemIndex para SectionList.
+  const initialScrollTarget = useMemo(() => {
+    if (sortedLaLigaMatches.length === 0) return null;
+    const now = new Date();
+    // Prioridad: un partido en curso ahora mismo > el próximo por empezar > el último jugado.
+    let targetId = sortedLaLigaMatches.find(
+      (m) => m.status !== 'finished' && new Date(m.startTime) <= now
+    )?._id;
+    if (!targetId) targetId = sortedLaLigaMatches.find((m) => new Date(m.startTime) > now)?._id;
+    if (!targetId) targetId = sortedLaLigaMatches[sortedLaLigaMatches.length - 1]._id;
+    for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
+      const itemIndex = sections[sectionIndex].data.findIndex((m) => m._id === targetId);
+      if (itemIndex !== -1) return { sectionIndex, itemIndex };
+    }
+    return null;
+  }, [sortedLaLigaMatches, sections]);
+
+  // Jornada "activa" para el banner de cartas: la filtrada si hay filtro, si no la del
+  // partido más cercano/en curso (la misma a la que hace scroll el modo "Todos").
+  const activeMatchday = filterMatchday ?? (
+    initialScrollTarget ? sections[initialScrollTarget.sectionIndex]?.matchday ?? null : null
+  );
+
+  const { data: myDeal } = useQuery({
+    queryKey: ['my-deal', groupId, season, activeMatchday],
+    queryFn: () => cardsApi.getMyDeal(groupId, season, activeMatchday!),
+    enabled: !!groupId && activeMatchday != null && competitionTab === 'la_liga',
+  });
+
+  useEffect(() => {
+    if (filterMatchday !== null || hasAutoScrolled.current || !initialScrollTarget) return;
+    hasAutoScrolled.current = true;
+    // Se intenta dos veces: la lista puede no tener aún medidos los ítems lejanos en el
+    // primer intento (scrollToLocation falla en silencio en ese caso), así que se repite
+    // un poco después, cuando ya se ha renderizado más contenido.
+    const t1 = setTimeout(() => scrollToTarget(initialScrollTarget, false), 80);
+    const t2 = setTimeout(() => scrollToTarget(initialScrollTarget, false), 500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [filterMatchday, initialScrollTarget]);
+
+  function selectJornada(day: number) {
+    setJornadaMenuVisible(false);
+    setFilterMatchday(day);
+  }
+
+  function clearFilter() {
+    setFilterMatchday(null);
+    // Al volver a "todos" se recoloca en el partido más cercano/en curso otra vez.
+    hasAutoScrolled.current = false;
+  }
+
   const filteredMatches = useMemo(() => {
     if (!matches) return [];
     if (competitionTab === 'la_liga') {
-      return matches.filter((m) => m.competition === 'la_liga' && m.matchday === selectedMatchday);
+      return matches.filter((m) => m.competition === 'la_liga' && m.matchday === filterMatchday);
     }
     return matches.filter((m) => m.competition === competitionTab);
-  }, [matches, competitionTab, selectedMatchday]);
+  }, [matches, competitionTab, filterMatchday]);
 
   const isLoading = loadingMatches || loadingPredictions;
-  const currentIdx = matchdays.indexOf(selectedMatchday);
+  const showAllView = competitionTab === 'la_liga' && filterMatchday === null;
 
   if (!group) return null;
 
@@ -243,34 +321,48 @@ export default function PredictionsTab() {
         </View>
       )}
 
-      {/* Selector de jornada (solo La Liga) */}
+      {/* Ir a jornada (modo "Todos") / Título de jornada + Volver (modo filtrado) — solo La Liga */}
       {competitionTab === 'la_liga' && (
-        <View style={styles.matchdayNav}>
-          <IconButton
-            icon="chevron-left" size={28}
-            onPress={() => setSelectedMatchday(matchdays[currentIdx - 1])}
-            disabled={currentIdx <= 0}
-          />
-          <Text variant="titleMedium" style={styles.matchdayLabel}>
-            Jornada {selectedMatchday}
-            <Text variant="bodySmall" style={styles.matchdayTotal}> / {matchdays.length}</Text>
-          </Text>
-          <IconButton
-            icon="chevron-right" size={28}
-            onPress={() => setSelectedMatchday(matchdays[currentIdx + 1])}
-            disabled={currentIdx >= matchdays.length - 1}
-          />
+        <View style={styles.jornadaBar}>
+          {filterMatchday != null ? (
+            <>
+              <Text variant="titleMedium" style={styles.matchdayTitle}>Jornada {filterMatchday}</Text>
+              <Button mode="text" compact icon="arrow-left" onPress={clearFilter}>
+                Volver
+              </Button>
+            </>
+          ) : (
+            <Menu
+              visible={jornadaMenuVisible}
+              onDismiss={() => setJornadaMenuVisible(false)}
+              anchor={
+                <Button
+                  mode="outlined" compact icon="menu-down"
+                  contentStyle={styles.jornadaMenuBtnContent}
+                  onPress={() => setJornadaMenuVisible(true)}
+                >
+                  Ir a jornada
+                </Button>
+              }
+            >
+              <ScrollView style={styles.jornadaMenuScroll}>
+                {matchdays.map((day) => (
+                  <Menu.Item key={day} title={`Jornada ${day}`} onPress={() => selectJornada(day)} />
+                ))}
+              </ScrollView>
+            </Menu>
+          )}
         </View>
       )}
 
-      {/* Banner carta de jornada (solo La Liga) */}
-      {competitionTab === 'la_liga' && groupId && myDeal?.deal && myDeal.deal.status !== 'expired' && (
+      {/* Banner carta de jornada (solo La Liga): la jornada filtrada, o si no la más cercana */}
+      {competitionTab === 'la_liga' && activeMatchday != null && groupId && myDeal?.deal && myDeal.deal.status !== 'expired' && (
         <Button
           mode={myDeal.deal.status === 'pending' || myDeal.deal.status === 'locked' ? 'contained-tonal' : 'text'}
           compact icon={myDeal.deal.status === 'locked' ? 'lock' : 'cards-playing'}
           onPress={() => router.push({
             pathname: '/cards/[groupId]' as never,
-            params: { groupId, season, matchday: String(selectedMatchday) },
+            params: { groupId, season, matchday: String(activeMatchday) },
           })}
           style={styles.cardBanner}
         >
@@ -281,27 +373,62 @@ export default function PredictionsTab() {
         </Button>
       )}
 
-      <FlatList
-        data={filteredMatches}
-        keyExtractor={(m) => m._id}
-        renderItem={({ item }) => (
-          <MatchCard
-            match={item}
-            prediction={predictionMap.get(item._id)}
-            season={season}
-            groupId={groupId}
-            multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
-          />
-        )}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {competitionTab === 'la_liga'
-              ? 'No hay partidos para esta jornada.'
-              : 'No hay partidos de esta competición todavía.'}
-          </Text>
-        }
-      />
+      {showAllView ? (
+        <SectionList
+          ref={sectionListRef}
+          sections={sections}
+          keyExtractor={(m) => m._id}
+          stickySectionHeadersEnabled
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              <Text variant="labelLarge" style={styles.sectionHeaderText}>{section.title}</Text>
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <MatchCard
+              match={item}
+              prediction={predictionMap.get(item._id)}
+              season={season}
+              groupId={groupId}
+              multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
+            />
+          )}
+          contentContainerStyle={styles.list}
+          initialNumToRender={40}
+          onScrollToIndexFailed={() => {
+            // El objetivo aún no está medido (offscreen) — se reintenta un poco después,
+            // cuando ya se ha renderizado más contenido de la lista.
+            setTimeout(() => {
+              if (lastScrollTarget.current) scrollToTarget(lastScrollTarget.current, false);
+            }, 150);
+          }}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No hay partidos de La Liga todavía.</Text>
+          }
+        />
+      ) : (
+        <FlatList
+          data={filteredMatches}
+          keyExtractor={(m) => m._id}
+          renderItem={({ item }) => (
+            <MatchCard
+              match={item}
+              prediction={predictionMap.get(item._id)}
+              season={season}
+              groupId={groupId}
+              multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
+            />
+          )}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>
+              {competitionTab === 'la_liga'
+                ? 'No hay partidos para esta jornada.'
+                : 'No hay partidos de esta competición todavía.'}
+            </Text>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -316,12 +443,18 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
 
-  matchdayNav: {
+  jornadaBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#1F2540',
+    paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4,
   },
-  matchdayLabel: { fontWeight: '600' },
-  matchdayTotal: { opacity: 0.4, fontWeight: 'normal' },
+  matchdayTitle: { fontWeight: '700' },
+  jornadaMenuBtnContent: { flexDirection: 'row-reverse' },
+  jornadaMenuScroll: { maxHeight: 360 },
+  sectionHeader: {
+    backgroundColor: colors.bg, paddingHorizontal: 4, paddingTop: 14, paddingBottom: 6,
+  },
+  sectionHeaderText: { fontWeight: '700', color: colors.text2 },
+
   cardBanner: { marginHorizontal: 8, marginVertical: 4 },
   list: { padding: 12, gap: 10, paddingBottom: 32 },
   emptyText: { textAlign: 'center', opacity: 0.5, marginTop: 40, fontStyle: 'italic' },
