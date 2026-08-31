@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Avatar, Chip, IconButton, Surface, Text, useTheme } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { rankingApi, RankingEntry } from '@/api/ranking';
 import { penaltiesApi, RankingEntry as MatchdayRankingEntry, DebtEntry } from '@/api/penalties';
+import { predictionsApi } from '@/api/predictions';
 import { useAuth } from '@/context/AuthContext';
 
 const MEDAL_COLORS = ['#FFBE0B', '#C0C0C0', '#CD7F32'];
@@ -86,6 +87,37 @@ export default function RankingScreen() {
   const theme = useTheme();
   const [view, setView] = useState<'season' | 'matchday'>('season');
   const [matchday, setMatchday] = useState(1);
+  const hasSetCurrentMatchday = useRef(false);
+
+  const { data: matches } = useQuery({
+    queryKey: ['matches', season],
+    queryFn: () => predictionsApi.listMatches(season),
+    enabled: !!season,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Jornada "actual": la del partido en curso ahora mismo, o si no la del próximo por
+  // empezar, o si no la última jugada (temporada terminada) — para no arrancar en la 1.
+  const currentMatchday = useMemo(() => {
+    if (!matches) return null;
+    const laLiga = matches.filter((m) => m.competition === 'la_liga' && m.matchday != null);
+    if (laLiga.length === 0) return null;
+    const now = new Date();
+    const live = laLiga.find((m) => m.status !== 'finished' && new Date(m.startTime) <= now);
+    if (live) return live.matchday!;
+    const upcoming = [...laLiga]
+      .filter((m) => new Date(m.startTime) > now)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+    if (upcoming) return upcoming.matchday!;
+    const last = [...laLiga].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())[0];
+    return last.matchday ?? null;
+  }, [matches]);
+
+  useEffect(() => {
+    if (hasSetCurrentMatchday.current || currentMatchday == null) return;
+    hasSetCurrentMatchday.current = true;
+    setMatchday(currentMatchday);
+  }, [currentMatchday]);
 
   const { data: seasonRanking, isLoading: loadingSeason } = useQuery({
     queryKey: ['ranking', groupId, season],
