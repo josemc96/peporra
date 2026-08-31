@@ -10,5 +10,6 @@ router.get('/', requireAuth, matchController.listMatches);
 router.post('/', requireAuth, requireAdmin, matchController.createManualMatch);
 router.put('/:id/result', requireAuth, requireAdmin, matchController.setMatchResult);
 router.put('/:id/qualifier', requireAuth, requireAdmin, matchController.setMatchQualifier);
+router.post('/:id/recalculate', requireAuth, requireAdmin, matchController.recalculateMatchScores);
 
 export default router;

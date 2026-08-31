@@ -45,4 +45,9 @@ export const predictionsApi = {
     apiFetch<{ groups: Array<{ groupId: string; groupName: string; prediction: { predictedHome: number; predictedAway: number } | null }> }>(
       `/predictions/${encodeURIComponent(matchId)}/all-groups`
     ).then((r) => r.groups),
+
+  recalculateMatch: (matchId: string) =>
+    apiFetch<{ predictionsRescored: number }>(`/matches/${encodeURIComponent(matchId)}/recalculate`, {
+      method: 'POST',
+    }),
 };

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Match } from '../models/Match';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
+import { recalculateMatch } from '../jobs/recalculateMatch.job';
 
 function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
@@ -100,4 +101,11 @@ export async function setMatchQualifier(req: Request, res: Response): Promise<vo
   await match.save();
 
   res.json({ match });
+}
+
+// Recalcula la puntuación de un partido ya finalizado (ej. football-data.org corrigió el
+// resultado después de darlo por bueno y los puntos ya calculados quedaron desfasados).
+export async function recalculateMatchScores(req: Request, res: Response): Promise<void> {
+  const result = await recalculateMatch(req.params.id as string);
+  res.json(result);
 }

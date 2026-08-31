@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Image, ScrollView, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Avatar, Divider, Surface, Text, useTheme } from 'react-native-paper';
+import { ActivityIndicator, Avatar, Button, Divider, Snackbar, Surface, Text, useTheme } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { matchVisibilityApi } from '@/api/matchVisibility';
+import { predictionsApi } from '@/api/predictions';
 import { cardsApi, ActiveCardPlay, CardKey, CARD_LABELS, CARD_EMOJI } from '@/api/cards';
 import { useAuth } from '@/context/AuthContext';
 
@@ -95,11 +96,22 @@ export default function MatchPredictionViewScreen() {
 
   const { user } = useAuth();
   const theme = useTheme();
+  const queryClient = useQueryClient();
+  const [snackbar, setSnackbar] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['match-visibility', groupId, matchId],
     queryFn: () => matchVisibilityApi.get(groupId, matchId),
     refetchInterval: 60_000,
+  });
+
+  const recalculateMutation = useMutation({
+    mutationFn: () => predictionsApi.recalculateMatch(matchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['match-visibility', groupId, matchId] });
+      setSnackbar('Puntos recalculados');
+    },
+    onError: () => setSnackbar('No se pudo recalcular'),
   });
 
   const matchdayNum = matchday ? parseInt(matchday, 10) : null;
@@ -163,6 +175,7 @@ export default function MatchPredictionViewScreen() {
   }, [matchCardPlays, data]);
 
   return (
+    <>
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
       {/* Header del partido */}
       <Surface style={styles.matchHeader} elevation={1}>
@@ -183,6 +196,17 @@ export default function MatchPredictionViewScreen() {
           </View>
         </View>
       </Surface>
+
+      {user?.role === 'admin' && data?.phase === 'finished' && (
+        <Button
+          mode="outlined" compact icon="refresh" style={styles.recalcBtn}
+          loading={recalculateMutation.isPending}
+          disabled={recalculateMutation.isPending}
+          onPress={() => recalculateMutation.mutate()}
+        >
+          Recalcular puntos de este partido
+        </Button>
+      )}
 
       {isLoading && <ActivityIndicator style={{ marginTop: 32 }} />}
       {isError && <Text style={styles.error}>No se pudo cargar la información.</Text>}
@@ -267,6 +291,10 @@ export default function MatchPredictionViewScreen() {
         </>
       )}
     </ScrollView>
+    <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar(null)} duration={3000}>
+      {snackbar}
+    </Snackbar>
+    </>
   );
 }
 
@@ -274,6 +302,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   container: { padding: 16, gap: 12, paddingBottom: 40 },
   matchHeader: { borderRadius: 10, padding: 16, gap: 8 },
+  recalcBtn: { alignSelf: 'center' },
   date: { textAlign: 'center', opacity: 0.5, textTransform: 'capitalize' },
   teamsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   teamCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
