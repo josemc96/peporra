@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator, Avatar, Button, Chip, Divider, IconButton,
@@ -11,6 +11,7 @@ import * as Clipboard from 'expo-clipboard';
 import { rankingApi, RankingEntry } from '@/api/ranking';
 import { penaltiesApi, RankingEntry as MatchdayRankingEntry } from '@/api/penalties';
 import { adminGroupApi } from '@/api/adminGroup';
+import { predictionsApi } from '@/api/predictions';
 import { groupsApi } from '@/api/groups';
 import { apiFetch } from '@/api/client';
 import { awardPredictionsApi, Award } from '@/api/awardPredictions';
@@ -252,9 +253,40 @@ export default function GroupTab() {
   const [rankingView, setRankingView] = useState<'matchday' | 'season'>('matchday');
   const [matchday, setMatchday] = useState(1);
   const [copied, setCopied] = useState(false);
+  const hasSetCurrentMatchday = useRef(false);
 
   const groupId = group?.id ?? '';
   const season = group?.season ?? '';
+
+  const { data: matches } = useQuery({
+    queryKey: ['matches', season],
+    queryFn: () => predictionsApi.listMatches(season),
+    enabled: !!season,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Jornada "actual": la del partido en curso ahora mismo, o si no la del próximo por
+  // empezar, o si no la última jugada (temporada terminada) — para no arrancar en la 1.
+  const currentMatchday = useMemo(() => {
+    if (!matches) return null;
+    const laLiga = matches.filter((m) => m.competition === 'la_liga' && m.matchday != null);
+    if (laLiga.length === 0) return null;
+    const now = new Date();
+    const live = laLiga.find((m) => m.status !== 'finished' && new Date(m.startTime) <= now);
+    if (live) return live.matchday!;
+    const upcoming = [...laLiga]
+      .filter((m) => new Date(m.startTime) > now)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+    if (upcoming) return upcoming.matchday!;
+    const last = [...laLiga].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())[0];
+    return last.matchday ?? null;
+  }, [matches]);
+
+  useEffect(() => {
+    if (hasSetCurrentMatchday.current || currentMatchday == null) return;
+    hasSetCurrentMatchday.current = true;
+    setMatchday(currentMatchday);
+  }, [currentMatchday]);
 
   const { data: groupDetail } = useQuery({
     queryKey: ['group-detail', groupId],
