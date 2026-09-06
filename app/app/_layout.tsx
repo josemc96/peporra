@@ -38,6 +38,7 @@ const OPT_EDIT_PRED      = { presentation: 'modal', title: 'Tu predicción' } as
 const OPT_VIEW_PRED      = { title: 'Predicciones del partido' } as const;
 const OPT_RANKING        = { title: 'Ranking' } as const;
 const OPT_STANDINGS      = { title: 'Clasificación' } as const;
+const OPT_STANDINGS_TABLE = { title: 'Tabla de La Liga' } as const;
 const OPT_AWARDS         = { title: 'Premios' } as const;
 const OPT_KNOCKOUT       = { title: 'Copa / Supercopa' } as const;
 const OPT_ADMIN          = { title: 'Panel de admin' } as const;
@@ -110,6 +111,7 @@ function RootLayoutNav() {
                   <Stack.Screen name="predictions/view/[matchId]" options={OPT_VIEW_PRED} />
                   <Stack.Screen name="ranking/[groupId]"         options={OPT_RANKING} />
                   <Stack.Screen name="standings-prediction/[season]" options={OPT_STANDINGS} />
+                  <Stack.Screen name="standings-table/[season]"  options={OPT_STANDINGS_TABLE} />
                   <Stack.Screen name="award-prediction/[season]" options={OPT_AWARDS} />
                   <Stack.Screen name="knockout/[season]"         options={OPT_KNOCKOUT} />
                   <Stack.Screen name="admin/[groupId]"           options={OPT_ADMIN} />

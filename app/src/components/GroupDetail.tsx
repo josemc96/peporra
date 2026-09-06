@@ -172,6 +172,15 @@ export function GroupDetail({ groupId, onLeave }: Props) {
           Mis cartas
         </Button>
 
+        <Button
+          mode="outlined"
+          icon="format-list-numbered"
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push({ pathname: '/standings-table/[season]' as any, params: { season: group.season } })}
+        >
+          Tabla de La Liga
+        </Button>
+
         {hasKnockout && (
           <Button
             mode="outlined"

@@ -393,16 +393,22 @@ export default function GroupTab() {
       </Surface>
 
       {/* Accesos rápidos */}
-      {hasStandings && (
-        <View style={styles.quickLinks}>
+      <View style={styles.quickLinks}>
+        <Button
+          mode="outlined" compact icon="format-list-numbered" style={styles.quickBtn}
+          onPress={() => router.push({ pathname: '/standings-table/[season]' as never, params: { season } })}
+        >
+          Tabla de La Liga
+        </Button>
+        {hasStandings && (
           <Button
             mode="outlined" compact icon="table" style={styles.quickBtn}
             onPress={() => router.push({ pathname: '/standings-prediction/[season]' as never, params: { season } })}
           >
             Clasificación
           </Button>
-        </View>
-      )}
+        )}
+      </View>
 
       {/* Tabs principales */}
       <View style={styles.mainTabs}>
