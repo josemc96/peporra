@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { predictionsApi } from '@/api/predictions';
+import { standingsTableApi } from '@/api/standingsTable';
 import { ApiError } from '@/api/client';
 import { colors } from '@/config/theme';
 
@@ -39,6 +40,17 @@ export default function EditPredictionScreen() {
     queryFn: () => predictionsApi.acrossGroups(matchId),
     select: (groups) => groups.filter((g) => g.groupId !== groupId && g.prediction !== null),
   });
+
+  const { data: table } = useQuery({
+    queryKey: ['standings-table', season],
+    queryFn: () => standingsTableApi.getCurrent(season),
+    enabled: !!season,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const positionByTeam = new Map(table?.map((row) => [row.team, row.position]));
+  const homePosition = positionByTeam.get(homeTeam);
+  const awayPosition = positionByTeam.get(awayTeam);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -80,6 +92,11 @@ export default function EditPredictionScreen() {
             <Text variant="titleMedium" style={styles.teamName} numberOfLines={2}>
               {homeTeam}
             </Text>
+            {homePosition != null && (
+              <View style={styles.teamPositionBadge}>
+                <Text variant="labelMedium" style={styles.teamPositionText}>{homePosition}º</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.scoreInputs}>
@@ -110,6 +127,11 @@ export default function EditPredictionScreen() {
             <Text variant="titleMedium" style={[styles.teamName, { textAlign: 'right' }]} numberOfLines={2}>
               {awayTeam}
             </Text>
+            {awayPosition != null && (
+              <View style={styles.teamPositionBadge}>
+                <Text variant="labelMedium" style={styles.teamPositionText}>{awayPosition}º</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -194,6 +216,16 @@ const styles = StyleSheet.create({
   teamName: {
     fontWeight: '600',
     textAlign: 'center',
+  },
+  teamPositionBadge: {
+    backgroundColor: colors.goldDim,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  teamPositionText: {
+    color: colors.gold,
+    fontWeight: '700',
   },
   scoreInputs: {
     flexDirection: 'row',

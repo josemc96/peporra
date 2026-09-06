@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { matchVisibilityApi } from '@/api/matchVisibility';
 import { predictionsApi } from '@/api/predictions';
+import { standingsTableApi } from '@/api/standingsTable';
 import { cardsApi, ActiveCardPlay, CardKey, CARD_LABELS, CARD_EMOJI } from '@/api/cards';
 import { useAuth } from '@/context/AuthContext';
 
@@ -105,6 +106,17 @@ export default function MatchPredictionViewScreen() {
     refetchInterval: 60_000,
   });
 
+  const { data: table } = useQuery({
+    queryKey: ['standings-table', season],
+    queryFn: () => standingsTableApi.getCurrent(season!),
+    enabled: !!season,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const positionByTeam = new Map(table?.map((row) => [row.team, row.position]));
+  const homePosition = positionByTeam.get(homeTeam);
+  const awayPosition = positionByTeam.get(awayTeam);
+
   const recalculateMutation = useMutation({
     mutationFn: () => predictionsApi.recalculateMatch(matchId),
     onSuccess: () => {
@@ -195,6 +207,21 @@ export default function MatchPredictionViewScreen() {
             {awayCrest ? <Image source={{ uri: awayCrest }} style={styles.crest} /> : null}
           </View>
         </View>
+
+        {(homePosition != null || awayPosition != null) && (
+          <View style={styles.positionsRow}>
+            <View style={styles.teamPositionBadge}>
+              <Text variant="labelMedium" style={styles.teamPositionText}>
+                {homePosition != null ? `${homePosition}º` : '—'}
+              </Text>
+            </View>
+            <View style={styles.teamPositionBadge}>
+              <Text variant="labelMedium" style={styles.teamPositionText}>
+                {awayPosition != null ? `${awayPosition}º` : '—'}
+              </Text>
+            </View>
+          </View>
+        )}
       </Surface>
 
       {user?.role === 'admin' && data?.phase === 'finished' && (
@@ -305,6 +332,11 @@ const styles = StyleSheet.create({
   recalcBtn: { alignSelf: 'center' },
   date: { textAlign: 'center', opacity: 0.5, textTransform: 'capitalize' },
   teamsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  positionsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  teamPositionBadge: {
+    backgroundColor: '#2A2005', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2,
+  },
+  teamPositionText: { color: '#FFBE0B', fontWeight: '700' },
   teamCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   teamCellRight: { justifyContent: 'flex-end' },
   crest: { width: 26, height: 26 },

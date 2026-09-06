@@ -25,17 +25,14 @@ export async function isPhaseComplete(season: string, phase: StandingsPhase): Pr
   return pending === 0;
 }
 
-// Calcula la tabla real a partir de nuestros propios partidos guardados (no se sincroniza
-// aparte desde la API). Desempate simplificado: puntos, diferencia de goles, goles a favor.
-export async function calculateRealTable(
+async function buildTable(
   season: string,
-  phase: StandingsPhase
+  throughMatchday?: number
 ): Promise<{ position: number; team: string }[]> {
-  const throughMatchday = PHASE_MATCHDAY[phase];
   const matches = await Match.find({
     season,
     competition: 'la_liga',
-    matchday: { $lte: throughMatchday },
+    ...(throughMatchday != null && { matchday: { $lte: throughMatchday } }),
     status: 'finished',
   });
 
@@ -75,4 +72,21 @@ export async function calculateRealTable(
       return b.points - a.points || diffB - diffA || b.goalsFor - a.goalsFor;
     })
     .map((row, index) => ({ position: index + 1, team: row.team }));
+}
+
+// Calcula la tabla real a partir de nuestros propios partidos guardados (no se sincroniza
+// aparte desde la API). Desempate simplificado: puntos, diferencia de goles, goles a favor.
+export async function calculateRealTable(
+  season: string,
+  phase: StandingsPhase
+): Promise<{ position: number; team: string }[]> {
+  return buildTable(season, PHASE_MATCHDAY[phase]);
+}
+
+// Tabla real "ahora mismo", sin corte de jornada — para mostrar la posición actual de un
+// equipo (ej. en el editor de predicción), no ligada a las fases fijas de ida/vuelta.
+export async function calculateCurrentTable(
+  season: string
+): Promise<{ position: number; team: string }[]> {
+  return buildTable(season);
 }
