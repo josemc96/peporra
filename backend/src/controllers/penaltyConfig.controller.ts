@@ -7,6 +7,7 @@ import { Prediction } from '../models/Prediction';
 import { PredictionScore } from '../models/PredictionScore';
 import { User } from '../models/User';
 import { ManualAdjustment } from '../models/ManualAdjustment';
+import { CardEffect } from '../models/CardEffect';
 import { AppError } from '../utils/AppError';
 import { requireGroupAdmin, requireGroupMember } from '../services/groupAuth.service';
 import { applyMatchdayPenalties } from '../jobs/applyMatchdayPenalties.job';
@@ -110,6 +111,14 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
         exactScores.set(key, (exactScores.get(key) ?? 0) + 1);
       }
     }
+  }
+
+  // Puntos de cartas de esta jornada (Me la Juego / La Afición) — no tocan PredictionScore,
+  // igual que en el ranking de temporada (ranking.controller.ts) hay que sumarlos aparte.
+  const cardEffects = await CardEffect.find({ group: groupId, season, matchday: matchdayNum });
+  for (const effect of cardEffects) {
+    const key = effect.user.toString();
+    if (totals.has(key)) totals.set(key, (totals.get(key) ?? 0) + effect.points);
   }
 
   const users = await User.find({ _id: { $in: memberIds } }).select('alias email');
