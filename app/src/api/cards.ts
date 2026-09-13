@@ -137,4 +137,9 @@ export const cardsApi = {
 
   getActiveCardPlays: (groupId: string, season: string, matchday: number): Promise<{ plays: ActiveCardPlay[] }> =>
     apiFetch(`${base(groupId)}/active?season=${encodeURIComponent(season)}&matchday=${matchday}`),
+
+  getPressConferenceReveals: (groupId: string, season: string): Promise<{
+    reveals: Record<string, { alias: string; predictedHome: number; predictedAway: number }[]>;
+  }> =>
+    apiFetch(`${base(groupId)}/press-reveals?season=${encodeURIComponent(season)}`),
 };

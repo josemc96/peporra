@@ -4,6 +4,8 @@ import { CardConfig } from '../models/CardConfig';
 import { CardDeal } from '../models/CardDeal';
 import { CardPlay } from '../models/CardPlay';
 import { Match } from '../models/Match';
+import { Prediction } from '../models/Prediction';
+import { User } from '../models/User';
 import { AppError } from '../utils/AppError';
 import { requireGroupMember, requireGroupAdmin } from '../services/groupAuth.service';
 import { dealCards } from '../jobs/dealCards.job';
@@ -245,4 +247,72 @@ export async function redealAll(req: Request, res: Response): Promise<void> {
   }
 
   res.json({ redealt: deals.length });
+}
+
+// ── Rueda de prensa: revelado en bloque para toda la temporada ─────────────
+
+// Para cada partido con una Rueda de Prensa jugada, la predicción del objetivo (se hace
+// pública en cuanto se juega la carta, sin esperar al kickoff — igual que ya hace
+// matchPredictionVisibility.controller.ts partido a partido, pero aquí en bloque para toda
+// la temporada, así la lista de Predicciones no necesita una llamada por partido).
+export async function getPressConferenceReveals(req: Request, res: Response): Promise<void> {
+  const groupId = req.params.groupId as string;
+  const { season } = req.query as { season?: string };
+  if (!season) throw new AppError('season es obligatorio', 400);
+
+  await requireGroupMember(groupId, req.user!.id);
+
+  const deals = await CardDeal.find({ group: groupId, season, card: 'rueda_prensa', status: 'played' })
+    .select('_id');
+  if (deals.length === 0) {
+    res.json({ reveals: {} });
+    return;
+  }
+
+  const plays = await CardPlay.find({ deal: { $in: deals.map((d) => d._id) }, targetUser: { $exists: true }, targetMatch: { $exists: true } })
+    .select('targetUser targetMatch');
+  if (plays.length === 0) {
+    res.json({ reveals: {} });
+    return;
+  }
+
+  const targetUserIds = plays.map((p) => p.targetUser!);
+  const targetMatchIds = plays.map((p) => p.targetMatch!);
+
+  const predictions = await Prediction.find({
+    group: groupId,
+    user: { $in: targetUserIds },
+    match: { $in: targetMatchIds },
+  }).select('user match predictedHome predictedAway');
+  const predByUserMatch = new Map(
+    predictions.map((p) => [`${p.user.toString()}|${p.match.toString()}`, p])
+  );
+
+  const users = await User.find({ _id: { $in: targetUserIds } }).select('alias');
+  const aliasById = new Map(users.map((u) => [(u._id as Types.ObjectId).toString(), u.alias]));
+
+  // Un mismo objetivo puede recibir varias ruedas de prensa en el mismo partido (de
+  // distintos miembros) — se deduplica por (partido, objetivo), solo importa que su
+  // predicción quedó pública, no cuántas veces.
+  const seen = new Set<string>();
+  const reveals: Record<string, { alias: string; predictedHome: number; predictedAway: number }[]> = {};
+  for (const play of plays) {
+    const userId = play.targetUser!.toString();
+    const matchId = play.targetMatch!.toString();
+    const dedupeKey = `${userId}|${matchId}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    const pred = predByUserMatch.get(dedupeKey);
+    if (!pred) continue;
+
+    if (!reveals[matchId]) reveals[matchId] = [];
+    reveals[matchId].push({
+      alias: aliasById.get(userId) ?? userId,
+      predictedHome: pred.predictedHome,
+      predictedAway: pred.predictedAway,
+    });
+  }
+
+  res.json({ reveals });
 }
