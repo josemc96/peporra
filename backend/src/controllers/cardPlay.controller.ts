@@ -5,6 +5,7 @@ import { CardPlay, ICardPlayParams } from '../models/CardPlay';
 import { CardConfig } from '../models/CardConfig';
 import { Match } from '../models/Match';
 import { Prediction } from '../models/Prediction';
+import { User } from '../models/User';
 import { AppError } from '../utils/AppError';
 import { requireGroupMember } from '../services/groupAuth.service';
 import { CardKey } from '../types/enums';
@@ -102,25 +103,13 @@ async function validatePlay(
       return { targetMatchId: matchId, params: {} };
     }
 
-    // ── El Espía: can spy any match in matchday before kickoff ──────────
+    // ── El Espía: se juega directamente sobre un partido antes del kickoff;
+    // las predicciones de la peña se consultan después (getMySpyResults) ────
     case 'el_espia': {
       if (!matchId) throw new AppError('matchId es obligatorio', 400);
       const match = await resolveMatch(matchId);
       if (new Date() >= new Date(match.startTime)) throw new AppError('El partido ya ha empezado', 409);
-      // Optional copy
-      const { copiedUserId } = params as { copiedUserId?: string };
-      if (copiedUserId) {
-        assertIsMember(group, copiedUserId);
-        assertNotSelf(userId, copiedUserId);
-        const sourcePred = await Prediction.findOne({ user: copiedUserId, match: matchId });
-        if (!sourcePred) throw new AppError('El jugador copiado no tiene predicción en este partido', 404);
-        await Prediction.findOneAndUpdate(
-          { user: userId, match: matchId },
-          { user: new Types.ObjectId(userId), match: new Types.ObjectId(matchId), predictedHome: sourcePred.predictedHome, predictedAway: sourcePred.predictedAway, status: 'pending' },
-          { upsert: true, new: true }
-        );
-      }
-      return { targetMatchId: matchId, params: { copiedUserId } };
+      return { targetMatchId: matchId, params: {} };
     }
 
     // ── Me la Juego: bet on exact score ────────────────────────────────
@@ -193,40 +182,6 @@ export async function playCard(req: Request, res: Response): Promise<void> {
   res.status(201).json({ play, deal });
 }
 
-// ── Espía spy window (read-only) ───────────────────────────────────────────
-
-export async function spyMatch(req: Request, res: Response): Promise<void> {
-  const groupId = req.params.groupId as string;
-  const matchId = req.params.matchId as string;
-  const userId = req.user!.id;
-
-  const group = await requireGroupMember(groupId, userId);
-
-  const match = await resolveMatch(matchId);
-  if (new Date() >= new Date(match.startTime)) throw new AppError('El partido ya ha empezado', 409);
-
-  // User must have an unused Espía card for this matchday
-  const espíaDeal = await CardDeal.findOne({
-    group: groupId,
-    season: match.season,
-    matchday: match.matchday,
-    user: userId,
-    card: 'el_espia',
-    status: 'pending',
-  });
-  if (!espíaDeal) throw new AppError('No tienes carta de Espía disponible para esta jornada', 403);
-
-  const memberIds = group.members.map((m) => m.toString());
-  const predictions = await Prediction.find({ match: matchId, user: { $in: memberIds } })
-    .populate('user', 'alias');
-
-  res.json({ predictions: predictions.map((p) => ({
-    user: { id: (p.user as any)._id, alias: (p.user as any).alias },
-    predictedHome: p.predictedHome,
-    predictedAway: p.predictedAway,
-  })) });
-}
-
 // ── Get active (revealed) card plays for a matchday ───────────────────────
 
 export async function getActiveCardPlays(req: Request, res: Response): Promise<void> {
@@ -259,4 +214,56 @@ export async function getActiveCardPlays(req: Request, res: Response): Promise<v
   });
 
   res.json({ plays: revealed });
+}
+
+// ── Resultados de El Espía ya jugado ───────────────────────────────────────
+
+// Para cada partido donde el usuario ya jugó El Espía (independientemente de si el
+// partido ya empezó), las predicciones de la peña que vio en ese momento — a diferencia
+// de spyMatch (que solo funciona MIENTRAS la carta está pendiente, antes de jugarla),
+// esto sirve para volver a consultar lo que ya se espió, en cualquier momento después.
+export async function getMySpyResults(req: Request, res: Response): Promise<void> {
+  const groupId = req.params.groupId as string;
+  const { season } = req.query as { season?: string };
+  if (!season) throw new AppError('season es obligatorio', 400);
+
+  const group = await requireGroupMember(groupId, req.user!.id);
+  const memberIds = group.members.map((m) => m.toString());
+
+  const deals = await CardDeal.find({ group: groupId, season, user: req.user!.id, card: 'el_espia', status: 'played' })
+    .select('_id');
+  if (deals.length === 0) {
+    res.json({ results: {} });
+    return;
+  }
+
+  const plays = await CardPlay.find({ deal: { $in: deals.map((d) => d._id) }, targetMatch: { $exists: true } })
+    .select('targetMatch');
+  const matchIds = plays.map((p) => p.targetMatch!);
+  if (matchIds.length === 0) {
+    res.json({ results: {} });
+    return;
+  }
+
+  const predictions = await Prediction.find({
+    group: groupId,
+    match: { $in: matchIds },
+    user: { $in: memberIds },
+  }).select('user match predictedHome predictedAway');
+
+  const users = await User.find({ _id: { $in: memberIds } }).select('alias');
+  const aliasById = new Map(users.map((u) => [(u._id as Types.ObjectId).toString(), u.alias]));
+
+  const results: Record<string, { alias: string; predictedHome: number; predictedAway: number }[]> = {};
+  for (const pred of predictions) {
+    const matchId = pred.match.toString();
+    if (!results[matchId]) results[matchId] = [];
+    results[matchId].push({
+      alias: aliasById.get(pred.user.toString()) ?? pred.user.toString(),
+      predictedHome: pred.predictedHome,
+      predictedAway: pred.predictedAway,
+    });
+  }
+
+  res.json({ results });
 }

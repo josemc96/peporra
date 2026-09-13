@@ -38,13 +38,15 @@ function resolveMultiplier(match: Match, multipliers: ScoreMultiplier[]): number
   return null;
 }
 
-function MatchCard({ match, prediction, season, groupId, multiplier, missingPredictors, pressReveals }: {
+function MatchCard({ match, prediction, season, groupId, multiplier, missingPredictors, pressReveals, spyResults }: {
   match: Match; prediction: Prediction | undefined;
   season: string; groupId: string; multiplier: number | null;
   missingPredictors: { id: string; alias: string }[];
   pressReveals: { alias: string; predictedHome: number; predictedAway: number }[];
+  spyResults: { alias: string; predictedHome: number; predictedAway: number }[];
 }) {
   const [showMissing, setShowMissing] = useState(false);
+  const [showSpy, setShowSpy] = useState(false);
   const isLocked = new Date() >= new Date(match.startTime);
   const hasPrediction = prediction !== undefined;
   const isFinished = match.status === 'finished';
@@ -140,6 +142,15 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
           </View>
 
           <View style={styles.predictionRowRight}>
+            {spyResults.length > 0 && (
+              <Button
+                mode="text" compact
+                onPress={() => setShowSpy((v) => !v)}
+                style={styles.spyBtn}
+              >
+                🕵️
+              </Button>
+            )}
             {!isLocked ? (
               missingPredictors.length > 0 && (
                 <Button
@@ -166,6 +177,16 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
             <Text variant="labelSmall" style={styles.missingText}>
               Faltan: {missingPredictors.map((m) => m.alias).join(', ')}
             </Text>
+          </View>
+        )}
+        {showSpy && spyResults.length > 0 && (
+          <View style={styles.missingBox}>
+            <Text variant="labelSmall" style={styles.spyTitle}>🕵️ Espiaste:</Text>
+            {spyResults.map((r, i) => (
+              <Text key={i} variant="labelSmall" style={styles.spyResultText}>
+                {r.alias}: {r.predictedHome}-{r.predictedAway}
+              </Text>
+            ))}
           </View>
         )}
       </Card.Content>
@@ -212,6 +233,13 @@ export default function PredictionsTab() {
   const { data: pressReveals } = useQuery({
     queryKey: ['press-reveals', groupId, season],
     queryFn: () => cardsApi.getPressConferenceReveals(groupId, season).then((r) => r.reveals),
+    enabled: !!season && !!groupId,
+    staleTime: 60_000,
+  });
+
+  const { data: spyResultsByMatch } = useQuery({
+    queryKey: ['spy-results', groupId, season],
+    queryFn: () => cardsApi.getMySpyResults(groupId, season).then((r) => r.results),
     enabled: !!season && !!groupId,
     staleTime: 60_000,
   });
@@ -452,6 +480,7 @@ export default function PredictionsTab() {
               multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
               missingPredictors={missingByMatch?.[item._id] ?? []}
               pressReveals={pressReveals?.[item._id] ?? []}
+              spyResults={spyResultsByMatch?.[item._id] ?? []}
             />
           )}
           contentContainerStyle={styles.list}
@@ -480,6 +509,7 @@ export default function PredictionsTab() {
               multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
               missingPredictors={missingByMatch?.[item._id] ?? []}
               pressReveals={pressReveals?.[item._id] ?? []}
+              spyResults={spyResultsByMatch?.[item._id] ?? []}
             />
           )}
           contentContainerStyle={styles.list}
@@ -543,15 +573,18 @@ const styles = StyleSheet.create({
   liveBadgeText: { color: '#EF4444', fontWeight: '700' },
   predBtn: { marginLeft: -8 },
   whoMissingBtn: { marginRight: -8 },
+  spyBtn: { minWidth: 0 },
   missingBox: { marginTop: 2 },
   missingText: { color: colors.text2, fontStyle: 'italic' },
+  spyTitle: { color: colors.text2, fontWeight: '700' },
+  spyResultText: { color: colors.text1, marginTop: 1 },
   multChip: { backgroundColor: '#FFBE0B', height: 24 },
   multText: { color: '#000000', fontWeight: '700', fontSize: 12 },
   dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
   dateText: { opacity: 0.5 },
   predictionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   predictionRowLeft: { flex: 1, alignItems: 'flex-start' },
-  predictionRowRight: { flex: 1, alignItems: 'flex-end' },
+  predictionRowRight: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   predictionText: { fontWeight: '600' },
   noPrediction: { opacity: 0.4, fontStyle: 'italic' },
 });

@@ -99,7 +99,6 @@ export default function CardPlayScreen() {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [selectedRivalId, setSelectedRivalId] = useState<string | null>(null);
   const [betAmount, setBetAmount] = useState('');
-  const [spyCopiedId, setSpyCopiedId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -144,13 +143,6 @@ export default function CardPlayScreen() {
 
   const melaLimit = cardConfig?.config?.melaJuegoLimit ?? 5;
 
-  // ── Spy endpoint (el_espia) ───────────────────────────────────────────────
-
-  const { data: spyData, mutate: doSpy, isPending: spying, isSuccess: spied } = useMutation({
-    mutationFn: () => cardsApi.spyMatch(groupId, selectedMatchId!),
-    onError: (e) => setErrorMsg(e instanceof ApiError ? e.message : 'Error al espiar'),
-  });
-
   // ── Unlock mutation ───────────────────────────────────────────────────────
 
   const { mutate: unlock, isPending: unlocking } = useMutation({
@@ -176,7 +168,6 @@ export default function CardPlayScreen() {
       if (selectedRivalId) body.targetUserId = selectedRivalId;
 
       if (card === 'me_la_juego') body.params = { amount: parseInt(betAmount, 10) };
-      if (card === 'el_espia' && spyCopiedId) body.params = { copiedUserId: spyCopiedId };
 
       return cardsApi.playCard(groupId, body);
     },
@@ -346,7 +337,7 @@ export default function CardPlayScreen() {
                 <MatchPicker
                   matches={availableMatches}
                   selectedId={selectedMatchId}
-                  onSelect={(id) => { setSelectedMatchId(id); setSpyCopiedId(null); }}
+                  onSelect={(id) => setSelectedMatchId(id)}
                 />
               )}
               <Divider style={styles.divider} />
@@ -370,51 +361,13 @@ export default function CardPlayScreen() {
             </>
           )}
 
-
-          {/* el_espia: spy button + results */}
+          {/* el_espia: se juega directamente, sin previsualizar antes — verás las
+              predicciones de la peña para este partido después, desde Predicciones. */}
           {card === 'el_espia' && selectedMatchId && (
             <>
-              <Button
-                mode="outlined"
-                icon="eye"
-                onPress={() => doSpy()}
-                loading={spying}
-                disabled={spying}
-                style={{ marginBottom: 8 }}
-              >
-                Ver predicciones del partido
-              </Button>
-
-              {spied && spyData && (
-                <>
-                  <Text variant="titleSmall" style={styles.sectionTitle}>Predicciones de tus rivales</Text>
-                  {spyData.predictions.length === 0 && (
-                    <Text style={{ opacity: 0.5 }}>Nadie ha predicho este partido todavía.</Text>
-                  )}
-                  {spyData.predictions.map((p) => (
-                    <List.Item
-                      key={p.user.id}
-                      title={p.user.alias}
-                      description={`${p.predictedHome} - ${p.predictedAway}`}
-                      onPress={() => setSpyCopiedId(spyCopiedId === p.user.id ? null : p.user.id)}
-                      right={() => spyCopiedId === p.user.id
-                        ? <List.Icon icon="content-copy" color={theme.colors.primary} />
-                        : null
-                      }
-                      style={spyCopiedId === p.user.id
-                        ? { backgroundColor: theme.colors.primaryContainer, borderRadius: 8 }
-                        : undefined
-                      }
-                    />
-                  ))}
-                  {spyCopiedId && (
-                    <Text variant="bodySmall" style={{ opacity: 0.6, marginTop: 4 }}>
-                      Al jugar la carta copiarás la predicción de {spyData.predictions.find((p) => p.user.id === spyCopiedId)?.user.alias}.
-                      Si no seleccionas nadie, solo consumes la carta sin copiar.
-                    </Text>
-                  )}
-                </>
-              )}
+              <Text variant="bodySmall" style={{ opacity: 0.6, marginBottom: 8 }}>
+                Verás las predicciones de tus rivales para este partido después de jugar la carta.
+              </Text>
               <Divider style={styles.divider} />
             </>
           )}
