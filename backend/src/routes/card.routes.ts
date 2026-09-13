@@ -6,7 +6,7 @@ import {
   redealUser, redealAll, resetDeal, unlockCard,
   recalculateCardEffects, getPressConferenceReveals,
 } from '../controllers/card.controller';
-import { playCard, spyMatch, getActiveCardPlays } from '../controllers/cardPlay.controller';
+import { playCard, getActiveCardPlays, getMySpyResults } from '../controllers/cardPlay.controller';
 
 const router = Router({ mergeParams: true });
 
@@ -32,8 +32,8 @@ router.post('/unlock',         unlockCard);
 
 // Play
 router.post('/play',           playCard);
-router.get('/spy/:matchId',    spyMatch);
 router.get('/active',          getActiveCardPlays);
 router.get('/press-reveals',   getPressConferenceReveals);
+router.get('/spy-results',     getMySpyResults);
 
 export default router;

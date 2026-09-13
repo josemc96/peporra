@@ -130,11 +130,6 @@ export const cardsApi = {
   }): Promise<{ play: CardPlay; deal: CardDeal }> =>
     apiFetch(`${base(groupId)}/play`, json(body)),
 
-  spyMatch: (groupId: string, matchId: string): Promise<{
-    predictions: Array<{ user: { id: string; alias: string }; predictedHome: number; predictedAway: number }>;
-  }> =>
-    apiFetch(`${base(groupId)}/spy/${matchId}`),
-
   getActiveCardPlays: (groupId: string, season: string, matchday: number): Promise<{ plays: ActiveCardPlay[] }> =>
     apiFetch(`${base(groupId)}/active?season=${encodeURIComponent(season)}&matchday=${matchday}`),
 
@@ -142,4 +137,9 @@ export const cardsApi = {
     reveals: Record<string, { alias: string; predictedHome: number; predictedAway: number }[]>;
   }> =>
     apiFetch(`${base(groupId)}/press-reveals?season=${encodeURIComponent(season)}`),
+
+  getMySpyResults: (groupId: string, season: string): Promise<{
+    results: Record<string, { alias: string; predictedHome: number; predictedAway: number }[]>;
+  }> =>
+    apiFetch(`${base(groupId)}/spy-results?season=${encodeURIComponent(season)}`),
 };
