@@ -38,10 +38,11 @@ function resolveMultiplier(match: Match, multipliers: ScoreMultiplier[]): number
   return null;
 }
 
-function MatchCard({ match, prediction, season, groupId, multiplier, missingPredictors }: {
+function MatchCard({ match, prediction, season, groupId, multiplier, missingPredictors, pressReveals }: {
   match: Match; prediction: Prediction | undefined;
   season: string; groupId: string; multiplier: number | null;
   missingPredictors: { id: string; alias: string }[];
+  pressReveals: { alias: string; predictedHome: number; predictedAway: number }[];
 }) {
   const [showMissing, setShowMissing] = useState(false);
   const isLocked = new Date() >= new Date(match.startTime);
@@ -111,14 +112,36 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
             <Chip compact style={styles.multChip} textStyle={styles.multText}>×{multiplier}</Chip>
           )}
         </View>
-        <Text variant="labelSmall" style={styles.dateText}>{formatDateTime(match.startTime)}</Text>
+        <View style={styles.dateRow}>
+          <Text variant="labelSmall" style={styles.dateText}>{formatDateTime(match.startTime)}</Text>
+          {pressReveals.length > 0 && (
+            <View style={styles.pressRevealCol}>
+              {pressReveals.map((r, i) => (
+                <Text key={i} variant="labelSmall" style={styles.pressRevealText}>
+                  🎙️ {r.alias}: {r.predictedHome}-{r.predictedAway}
+                </Text>
+              ))}
+            </View>
+          )}
+        </View>
         <View style={styles.predictionRow}>
-          {!isLocked ? (
-            <>
+          <View style={styles.predictionRowLeft}>
+            {!isLocked ? (
               <Button mode="text" compact onPress={openEditor} style={styles.predBtn}>
                 {hasPrediction ? 'Editar' : 'Predecir'}
               </Button>
-              {missingPredictors.length > 0 && (
+            ) : hasPrediction ? (
+              <Text variant="bodySmall" style={[styles.predictionText, { color: predTextColor }]}>
+                Tu predicción: {prediction.predictedHome} - {prediction.predictedAway}
+              </Text>
+            ) : (
+              <Text variant="bodySmall" style={styles.noPrediction}>No predijiste</Text>
+            )}
+          </View>
+
+          <View style={styles.predictionRowRight}>
+            {!isLocked ? (
+              missingPredictors.length > 0 && (
                 <Button
                   mode="text" compact
                   icon={showMissing ? 'chevron-up' : 'account-group'}
@@ -127,21 +150,16 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
                 >
                   Quién falta
                 </Button>
-              )}
-            </>
-          ) : hasPrediction ? (
-            <Text variant="bodySmall" style={[styles.predictionText, { color: predTextColor }]}>
-              Tu predicción: {prediction.predictedHome} - {prediction.predictedAway}
-            </Text>
-          ) : (
-            <Text variant="bodySmall" style={styles.noPrediction}>No predijiste</Text>
-          )}
-          {isLive && (
-            <View style={styles.liveBadge}>
-              <View style={styles.liveDot} />
-              <Text variant="labelSmall" style={styles.liveBadgeText}>EN CURSO</Text>
-            </View>
-          )}
+              )
+            ) : (
+              isLive && (
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text variant="labelSmall" style={styles.liveBadgeText}>EN CURSO</Text>
+                </View>
+              )
+            )}
+          </View>
         </View>
         {showMissing && missingPredictors.length > 0 && (
           <View style={styles.missingBox}>
@@ -187,6 +205,13 @@ export default function PredictionsTab() {
   const { data: missingByMatch } = useQuery({
     queryKey: ['missing-predictors', groupId, season],
     queryFn: () => predictionsApi.getMissingPredictors(groupId, season),
+    enabled: !!season && !!groupId,
+    staleTime: 60_000,
+  });
+
+  const { data: pressReveals } = useQuery({
+    queryKey: ['press-reveals', groupId, season],
+    queryFn: () => cardsApi.getPressConferenceReveals(groupId, season).then((r) => r.reveals),
     enabled: !!season && !!groupId,
     staleTime: 60_000,
   });
@@ -426,6 +451,7 @@ export default function PredictionsTab() {
               groupId={groupId}
               multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
               missingPredictors={missingByMatch?.[item._id] ?? []}
+              pressReveals={pressReveals?.[item._id] ?? []}
             />
           )}
           contentContainerStyle={styles.list}
@@ -453,6 +479,7 @@ export default function PredictionsTab() {
               groupId={groupId}
               multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
               missingPredictors={missingByMatch?.[item._id] ?? []}
+              pressReveals={pressReveals?.[item._id] ?? []}
             />
           )}
           contentContainerStyle={styles.list}
@@ -505,6 +532,8 @@ const styles = StyleSheet.create({
   team: { flexShrink: 1 },
   teamRight: { textAlign: 'right' },
   vs: { opacity: 0.5 },
+  pressRevealCol: { alignItems: 'flex-end', gap: 2 },
+  pressRevealText: { color: colors.gold, fontWeight: '600' },
   scoreCenter: { fontWeight: '700', minWidth: 48, textAlign: 'center' },
   predCenter: { fontWeight: '600', minWidth: 48, textAlign: 'center', opacity: 0.75 },
   liveIndicator: { color: '#8892A4', fontWeight: '700', minWidth: 64, textAlign: 'center' },
@@ -518,8 +547,11 @@ const styles = StyleSheet.create({
   missingText: { color: colors.text2, fontStyle: 'italic' },
   multChip: { backgroundColor: '#FFBE0B', height: 24 },
   multText: { color: '#000000', fontWeight: '700', fontSize: 12 },
-  dateText: { opacity: 0.5, marginTop: 2 },
-  predictionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  dateText: { opacity: 0.5 },
+  predictionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  predictionRowLeft: { flex: 1, alignItems: 'flex-start' },
+  predictionRowRight: { flex: 1, alignItems: 'flex-end' },
   predictionText: { fontWeight: '600' },
   noPrediction: { opacity: 0.4, fontStyle: 'italic' },
 });

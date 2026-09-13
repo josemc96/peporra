@@ -4,7 +4,7 @@ import {
   getCardConfig, updateCardConfig,
   getMyDeal, getAllDeals, triggerDeal,
   redealUser, redealAll, resetDeal, unlockCard,
-  recalculateCardEffects,
+  recalculateCardEffects, getPressConferenceReveals,
 } from '../controllers/card.controller';
 import { playCard, spyMatch, getActiveCardPlays } from '../controllers/cardPlay.controller';
 
@@ -34,5 +34,6 @@ router.post('/unlock',         unlockCard);
 router.post('/play',           playCard);
 router.get('/spy/:matchId',    spyMatch);
 router.get('/active',          getActiveCardPlays);
+router.get('/press-reveals',   getPressConferenceReveals);
 
 export default router;
