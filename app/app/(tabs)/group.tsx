@@ -74,9 +74,12 @@ function MatchdayRow({ entry, position, isMe, total, onPress, onKick }: {
         <Text variant="bodyLarge" style={[styles.alias, styles.userInfo, isMe && styles.aliasMe]}>
           {entry.user.alias ?? '?'}{isMe ? '  (tú)' : ''}
         </Text>
-        <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
-          {entry.points} pts
-        </Text>
+        <View style={styles.rightCol}>
+          <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
+            {entry.points} pts
+          </Text>
+          {entry.debt > 0 && <Text variant="labelSmall" style={styles.debt}>💸 {entry.debt}€</Text>}
+        </View>
         {onKick && (
           <IconButton icon="account-remove" size={20} onPress={(e) => { e.stopPropagation?.(); onKick(); }} />
         )}

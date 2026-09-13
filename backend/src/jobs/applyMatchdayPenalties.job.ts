@@ -38,6 +38,33 @@ async function computeMatchdayPoints(
   return totals;
 }
 
+// Cuántos partidos de La Liga de la jornada le faltan por predecir a cada miembro, en ESTE
+// grupo (una predicción hecha en otra peña no cuenta aquí — cada peña es independiente).
+async function computeMissingCounts(
+  groupId: Types.ObjectId,
+  season: string,
+  matchday: number,
+  memberIds: string[]
+): Promise<Map<string, number>> {
+  const matches = await Match.find({ competition: 'la_liga', season, matchday }).select('_id');
+  const totalMatches = matches.length;
+  const matchIds = matches.map((m) => m._id);
+
+  const predictions = await Prediction.find({ group: groupId, match: { $in: matchIds }, user: { $in: memberIds } })
+    .select('user');
+  const predictedCounts = new Map<string, number>();
+  for (const p of predictions) {
+    const uid = p.user.toString();
+    predictedCounts.set(uid, (predictedCounts.get(uid) ?? 0) + 1);
+  }
+
+  const missing = new Map<string, number>();
+  for (const id of memberIds) {
+    missing.set(id, totalMatches - (predictedCounts.get(id) ?? 0));
+  }
+  return missing;
+}
+
 // Checks if all La Liga matches of a matchday are finished and all predictions scored
 async function isMatchdayComplete(season: string, matchday: number): Promise<boolean> {
   const matches = await Match.find({ competition: 'la_liga', season, matchday }).select('_id status');
@@ -88,7 +115,26 @@ export async function applyMatchdayPenalties(groupIdFilter?: Types.ObjectId): Pr
 
       const points = await computeMatchdayPoints(config.group as Types.ObjectId, config.season, matchday, memberIds);
 
+      // Quien no predijo missingPredictionsThreshold partidos o más de la jornada queda
+      // fuera del ranking de posiciones: paga un importe fijo aparte y no cuenta para las
+      // posiciones (ni las "corre" hacia arriba) del resto de la peña.
+      if (config.missingPredictionsAmount > 0) {
+        const missingCounts = await computeMissingCounts(
+          config.group as Types.ObjectId, config.season, matchday, memberIds
+        );
+        for (const [userId, missing] of missingCounts.entries()) {
+          if (missing < config.missingPredictionsThreshold) continue;
+          await MatchdayPenalty.findOneAndUpdate(
+            { group: config.group, season: config.season, matchday, user: userId },
+            { group: config.group, season: config.season, matchday, user: userId, position: 0, amount: config.missingPredictionsAmount },
+            { upsert: true }
+          );
+          points.delete(userId);
+        }
+      }
+
       // Sort ascending (worst first) — empates quedan contiguos tras ordenar por puntos.
+      // Solo entran aquí quienes SÍ predijeron lo suficiente (points.delete arriba).
       const ranked = Array.from(points.entries()).sort((a, b) => a[1] - b[1]);
 
       const amountByPosition = new Map(config.penalties.map((p) => [p.position, p.amount]));

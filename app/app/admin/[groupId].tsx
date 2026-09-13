@@ -272,6 +272,9 @@ export default function AdminPanelScreen() {
   ]);
   const [penaltyRawInputs, setPenaltyRawInputs] = useState<Record<number, string>>({ 1: '0', 2: '0', 3: '0' });
   const [penaltiesSaved, setPenaltiesSaved] = useState(false);
+  const [missingThresholdInput, setMissingThresholdInput] = useState('3');
+  const [missingAmountInput, setMissingAmountInput] = useState('3.5');
+  const [missingConfigLoaded, setMissingConfigLoaded] = useState(false);
 
   const { data: penaltyConfig } = useQuery({
     queryKey: ['penalty-config', groupId, season],
@@ -285,9 +288,22 @@ export default function AdminPanelScreen() {
     loaded.forEach((p) => { raw[p.position] = String(p.amount); });
     setPenaltyRawInputs(raw);
   }
+  if (penaltyConfig && !missingConfigLoaded) {
+    setMissingThresholdInput(String(penaltyConfig.missingPredictionsThreshold));
+    setMissingAmountInput(String(penaltyConfig.missingPredictionsAmount));
+    setMissingConfigLoaded(true);
+  }
 
   const { mutate: savePenalties, isPending: savingPenalties } = useMutation({
-    mutationFn: () => penaltiesApi.updateConfig(groupId, season, localPenalties),
+    mutationFn: () => {
+      const threshold = parseInt(missingThresholdInput, 10);
+      const amount = parseFloat(missingAmountInput);
+      return penaltiesApi.updateConfig(
+        groupId, season, localPenalties,
+        isNaN(threshold) ? undefined : threshold,
+        isNaN(amount) ? undefined : amount,
+      );
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['penalty-config', groupId, season] }); setPenaltiesSaved(true); },
   });
 
@@ -588,6 +604,41 @@ export default function AdminPanelScreen() {
               </View>
             );
           })}
+
+          <Divider style={styles.divider} />
+          <Text variant="titleSmall" style={styles.sectionTitle}>Penalización por no predecir</Text>
+          <Text variant="bodySmall" style={styles.compNote}>
+            Si alguien no predice al menos este número de partidos de la jornada, paga este
+            importe fijo y no cuenta para las posiciones de arriba (ni las "corre" hacia
+            nadie más). Importe 0 = regla desactivada.
+          </Text>
+          <View style={styles.penaltyRow}>
+            <Text variant="bodyMedium" style={{ flex: 1 }}>Partidos sin predecir (mínimo)</Text>
+            <TextInput
+              value={missingThresholdInput}
+              onChangeText={(v) => {
+                if (v === '' || /^\d*$/.test(v)) { setMissingThresholdInput(v); setPenaltiesSaved(false); }
+              }}
+              keyboardType="number-pad"
+              mode="outlined"
+              dense
+              style={styles.pointsInput}
+            />
+          </View>
+          <View style={styles.penaltyRow}>
+            <Text variant="bodyMedium" style={{ flex: 1 }}>Importe fijo</Text>
+            <TextInput
+              value={missingAmountInput}
+              onChangeText={(v) => {
+                if (v === '' || /^\d*\.?\d*$/.test(v)) { setMissingAmountInput(v); setPenaltiesSaved(false); }
+              }}
+              keyboardType="decimal-pad"
+              mode="outlined"
+              dense
+              style={styles.pointsInput}
+              label="€"
+            />
+          </View>
           <View style={styles.saveRow}>
             {penaltiesSaved && <Text variant="labelMedium" style={{ color: theme.colors.primary }}>✓ Guardado</Text>}
             <Button mode="contained" onPress={() => savePenalties()} loading={savingPenalties} disabled={savingPenalties} style={{ flex: 1 }}>

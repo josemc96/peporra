@@ -25,9 +25,11 @@ export async function getPenaltyConfig(req: Request, res: Response): Promise<voi
 
 export async function updatePenaltyConfig(req: Request, res: Response): Promise<void> {
   const groupId = req.params.groupId as string;
-  const { season, penalties } = req.body as {
+  const { season, penalties, missingPredictionsThreshold, missingPredictionsAmount } = req.body as {
     season?: string;
     penalties?: { position: number; amount: number }[];
+    missingPredictionsThreshold?: number;
+    missingPredictionsAmount?: number;
   };
 
   if (!season) throw new AppError('season es obligatorio', 400);
@@ -42,11 +44,25 @@ export async function updatePenaltyConfig(req: Request, res: Response): Promise<
     }
   }
 
+  const update: Record<string, unknown> = { group: groupId, season, penalties };
+  if (missingPredictionsThreshold !== undefined) {
+    if (!Number.isInteger(missingPredictionsThreshold) || missingPredictionsThreshold < 1) {
+      throw new AppError('missingPredictionsThreshold debe ser un entero positivo', 400);
+    }
+    update.missingPredictionsThreshold = missingPredictionsThreshold;
+  }
+  if (missingPredictionsAmount !== undefined) {
+    if (typeof missingPredictionsAmount !== 'number' || missingPredictionsAmount < 0) {
+      throw new AppError('missingPredictionsAmount debe ser un número no negativo', 400);
+    }
+    update.missingPredictionsAmount = missingPredictionsAmount;
+  }
+
   await requireGroupAdmin(groupId, req.user!.id);
 
   const config = await PenaltyConfig.findOneAndUpdate(
     { group: groupId, season },
-    { group: groupId, season, penalties },
+    update,
     { upsert: true, new: true }
   );
 
@@ -121,6 +137,10 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
     if (totals.has(key)) totals.set(key, (totals.get(key) ?? 0) + effect.points);
   }
 
+  // Lo que toca pagar esa jornada concreta (0 si aún no se ha calculado o no le tocó nada).
+  const matchdayPenalties = await MatchdayPenalty.find({ group: groupId, season, matchday: matchdayNum });
+  const debtByUser = new Map(matchdayPenalties.map((p) => [p.user.toString(), p.amount]));
+
   const users = await User.find({ _id: { $in: memberIds } }).select('alias email');
   const userById = new Map(users.map((u) => [(u._id as Types.ObjectId).toString(), u]));
 
@@ -130,6 +150,7 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
       user: { id: userId, alias: userById.get(userId)!.alias, email: userById.get(userId)!.email },
       points,
       exactScores: exactScores.get(userId) ?? 0,
+      debt: debtByUser.get(userId) ?? 0,
     }))
     .sort((a, b) => b.points !== a.points ? b.points - a.points : b.exactScores - a.exactScores);
 

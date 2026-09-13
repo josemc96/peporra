@@ -74,9 +74,12 @@ function MatchdayRow({
           {entry.user.alias}{isMe ? '  (tú)' : ''}
         </Text>
       </View>
-      <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
-        {entry.points} pts
-      </Text>
+      <View style={styles.rightCol}>
+        <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
+          {entry.points} pts
+        </Text>
+        {entry.debt > 0 && <Text variant="labelSmall" style={styles.debt}>💸 {entry.debt}€</Text>}
+      </View>
     </Surface>
   );
 }
