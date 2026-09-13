@@ -10,12 +10,15 @@ export interface PenaltyConfig {
   group: string;
   season: string;
   penalties: PenaltyEntry[];
+  missingPredictionsThreshold: number;
+  missingPredictionsAmount: number;
 }
 
 export interface RankingEntry {
   user: { id: string; alias: string; email: string };
   points: number;
   exactScores: number;
+  debt: number;
 }
 
 export interface DebtEntry {
@@ -29,10 +32,13 @@ export const penaltiesApi = {
       `/groups/${groupId}/penalties/config?season=${encodeURIComponent(season)}`
     ).then((r) => r.config),
 
-  updateConfig: (groupId: string, season: string, penalties: PenaltyEntry[]) =>
+  updateConfig: (
+    groupId: string, season: string, penalties: PenaltyEntry[],
+    missingPredictionsThreshold?: number, missingPredictionsAmount?: number
+  ) =>
     apiFetch<{ config: PenaltyConfig }>(`/groups/${groupId}/penalties/config`, {
       method: 'PUT',
-      body: JSON.stringify({ season, penalties }),
+      body: JSON.stringify({ season, penalties, missingPredictionsThreshold, missingPredictionsAmount }),
     }).then((r) => r.config),
 
   recalculate: (groupId: string, season: string) =>

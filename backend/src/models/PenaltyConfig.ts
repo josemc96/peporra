@@ -9,6 +9,11 @@ export interface IPenaltyConfig extends Document {
   group: Types.ObjectId;
   season: string;
   penalties: IPenaltyEntry[];
+  // A partir de este número de partidos sin predecir en una jornada, el usuario queda
+  // fuera del ranking de posiciones (penalties) de esa jornada y paga este importe fijo
+  // en su lugar. amount = 0 desactiva la regla.
+  missingPredictionsThreshold: number;
+  missingPredictionsAmount: number;
 }
 
 const penaltyConfigSchema = new Schema<IPenaltyConfig>({
@@ -21,6 +26,8 @@ const penaltyConfigSchema = new Schema<IPenaltyConfig>({
       _id: false,
     },
   ],
+  missingPredictionsThreshold: { type: Number, required: true, default: 3, min: 1 },
+  missingPredictionsAmount: { type: Number, required: true, default: 3.5, min: 0 },
 });
 
 penaltyConfigSchema.index({ group: 1, season: 1 }, { unique: true });
