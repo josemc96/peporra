@@ -38,10 +38,12 @@ function resolveMultiplier(match: Match, multipliers: ScoreMultiplier[]): number
   return null;
 }
 
-function MatchCard({ match, prediction, season, groupId, multiplier }: {
+function MatchCard({ match, prediction, season, groupId, multiplier, missingPredictors }: {
   match: Match; prediction: Prediction | undefined;
   season: string; groupId: string; multiplier: number | null;
+  missingPredictors: { id: string; alias: string }[];
 }) {
+  const [showMissing, setShowMissing] = useState(false);
   const isLocked = new Date() >= new Date(match.startTime);
   const hasPrediction = prediction !== undefined;
   const isFinished = match.status === 'finished';
@@ -81,7 +83,7 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
   }
 
   return (
-    <Card style={styles.matchCard} onPress={isLocked ? openView : openEditor}>
+    <Card style={styles.matchCard} onPress={isLocked ? openView : undefined}>
       <Card.Content style={styles.cardContent}>
         <View style={styles.teamsRow}>
           <View style={styles.teamCell}>
@@ -112,9 +114,21 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
         <Text variant="labelSmall" style={styles.dateText}>{formatDateTime(match.startTime)}</Text>
         <View style={styles.predictionRow}>
           {!isLocked ? (
-            <Button mode="text" compact onPress={openEditor} style={styles.predBtn}>
-              {hasPrediction ? 'Editar' : 'Predecir'}
-            </Button>
+            <>
+              <Button mode="text" compact onPress={openEditor} style={styles.predBtn}>
+                {hasPrediction ? 'Editar' : 'Predecir'}
+              </Button>
+              {missingPredictors.length > 0 && (
+                <Button
+                  mode="text" compact
+                  icon={showMissing ? 'chevron-up' : 'account-group'}
+                  onPress={() => setShowMissing((v) => !v)}
+                  style={styles.whoMissingBtn}
+                >
+                  Quién falta
+                </Button>
+              )}
+            </>
           ) : hasPrediction ? (
             <Text variant="bodySmall" style={[styles.predictionText, { color: predTextColor }]}>
               Tu predicción: {prediction.predictedHome} - {prediction.predictedAway}
@@ -129,6 +143,13 @@ function MatchCard({ match, prediction, season, groupId, multiplier }: {
             </View>
           )}
         </View>
+        {showMissing && missingPredictors.length > 0 && (
+          <View style={styles.missingBox}>
+            <Text variant="labelSmall" style={styles.missingText}>
+              Faltan: {missingPredictors.map((m) => m.alias).join(', ')}
+            </Text>
+          </View>
+        )}
       </Card.Content>
     </Card>
   );
@@ -161,6 +182,13 @@ export default function PredictionsTab() {
     queryKey: ['predictions', season, groupId],
     queryFn: () => predictionsApi.listMyPredictions(season, groupId),
     enabled: !!season && !!groupId,
+  });
+
+  const { data: missingByMatch } = useQuery({
+    queryKey: ['missing-predictors', groupId, season],
+    queryFn: () => predictionsApi.getMissingPredictors(groupId, season),
+    enabled: !!season && !!groupId,
+    staleTime: 60_000,
   });
 
   const { data: multipliers } = useQuery({
@@ -397,6 +425,7 @@ export default function PredictionsTab() {
               season={season}
               groupId={groupId}
               multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
+              missingPredictors={missingByMatch?.[item._id] ?? []}
             />
           )}
           contentContainerStyle={styles.list}
@@ -423,6 +452,7 @@ export default function PredictionsTab() {
               season={season}
               groupId={groupId}
               multiplier={multipliers ? resolveMultiplier(item, multipliers) : null}
+              missingPredictors={missingByMatch?.[item._id] ?? []}
             />
           )}
           contentContainerStyle={styles.list}
@@ -483,6 +513,9 @@ const styles = StyleSheet.create({
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' },
   liveBadgeText: { color: '#EF4444', fontWeight: '700' },
   predBtn: { marginLeft: -8 },
+  whoMissingBtn: { marginRight: -8 },
+  missingBox: { marginTop: 2 },
+  missingText: { color: colors.text2, fontStyle: 'italic' },
   multChip: { backgroundColor: '#FFBE0B', height: 24 },
   multText: { color: '#000000', fontWeight: '700', fontSize: 12 },
   dateText: { opacity: 0.5, marginTop: 2 },
