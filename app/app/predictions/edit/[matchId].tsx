@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { predictionsApi } from '@/api/predictions';
-import { standingsTableApi } from '@/api/standingsTable';
+import { standingsTableApi, MatchResult } from '@/api/standingsTable';
 import { ApiError } from '@/api/client';
 import { colors } from '@/config/theme';
 
@@ -13,6 +13,23 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('es-ES', {
     weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
   });
+}
+
+const RESULT_COLOR: Record<MatchResult, string> = {
+  W: colors.green,
+  L: colors.error,
+  D: colors.text2,
+};
+
+function Last5Dots({ results }: { results: MatchResult[] }) {
+  if (results.length === 0) return null;
+  return (
+    <View style={styles.last5Row}>
+      {results.map((r, i) => (
+        <View key={i} style={[styles.last5Dot, { backgroundColor: RESULT_COLOR[r] }]} />
+      ))}
+    </View>
+  );
 }
 
 export default function EditPredictionScreen() {
@@ -48,9 +65,11 @@ export default function EditPredictionScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const positionByTeam = new Map(table?.map((row) => [row.team, row.position]));
-  const homePosition = positionByTeam.get(homeTeam);
-  const awayPosition = positionByTeam.get(awayTeam);
+  const rowByTeam = new Map(table?.map((row) => [row.team, row]));
+  const homePosition = rowByTeam.get(homeTeam)?.position;
+  const awayPosition = rowByTeam.get(awayTeam)?.position;
+  const homeLast5 = rowByTeam.get(homeTeam)?.last5 ?? [];
+  const awayLast5 = rowByTeam.get(awayTeam)?.last5 ?? [];
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -97,6 +116,7 @@ export default function EditPredictionScreen() {
                 <Text variant="labelMedium" style={styles.teamPositionText}>{homePosition}º</Text>
               </View>
             )}
+            <Last5Dots results={homeLast5} />
           </View>
 
           <View style={styles.scoreInputs}>
@@ -132,6 +152,7 @@ export default function EditPredictionScreen() {
                 <Text variant="labelMedium" style={styles.teamPositionText}>{awayPosition}º</Text>
               </View>
             )}
+            <Last5Dots results={awayLast5} />
           </View>
         </View>
 
@@ -226,6 +247,15 @@ const styles = StyleSheet.create({
   teamPositionText: {
     color: colors.gold,
     fontWeight: '700',
+  },
+  last5Row: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  last5Dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   scoreInputs: {
     flexDirection: 'row',
