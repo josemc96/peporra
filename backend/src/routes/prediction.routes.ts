@@ -8,6 +8,7 @@ router.use(requireAuth);
 
 router.put('/', predictionController.upsertPrediction);
 router.get('/', predictionController.listMyPredictions);
+router.get('/missing', predictionController.getMissingPredictors);
 router.get('/:matchId/all-groups', predictionController.getMyPredictionsAcrossGroups);
 router.get('/:matchId', predictionController.getPredictionForMatch);
 

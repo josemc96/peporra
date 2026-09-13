@@ -50,4 +50,9 @@ export const predictionsApi = {
     apiFetch<{ predictionsRescored: number }>(`/matches/${encodeURIComponent(matchId)}/recalculate`, {
       method: 'POST',
     }),
+
+  getMissingPredictors: (groupId: string, season: string) =>
+    apiFetch<{ missing: Record<string, { id: string; alias: string }[]> }>(
+      `/predictions/missing?groupId=${encodeURIComponent(groupId)}&season=${encodeURIComponent(season)}`
+    ).then((r) => r.missing),
 };
