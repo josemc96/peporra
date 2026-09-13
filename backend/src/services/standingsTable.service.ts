@@ -7,6 +7,8 @@ export const PHASE_MATCHDAY: Record<StandingsPhase, number> = {
   vuelta: 38,
 };
 
+export type MatchResult = 'W' | 'D' | 'L';
+
 interface StandingsRow {
   team: string;
   crest?: string;
@@ -17,11 +19,13 @@ interface StandingsRow {
   goalsFor: number;
   goalsAgainst: number;
   points: number;
+  results: MatchResult[];
 }
 
-export interface FullStandingsRow extends StandingsRow {
+export interface FullStandingsRow extends Omit<StandingsRow, 'results'> {
   position: number;
   goalDifference: number;
+  last5: MatchResult[];
 }
 
 export async function isPhaseComplete(season: string, phase: StandingsPhase): Promise<boolean> {
@@ -41,13 +45,13 @@ async function buildTable(season: string, throughMatchday?: number): Promise<Sta
     competition: 'la_liga',
     ...(throughMatchday != null && { matchday: { $lte: throughMatchday } }),
     status: 'finished',
-  });
+  }).sort({ startTime: 1 }); // orden cronológico: hace falta para que "results" quede en orden real
 
   const table = new Map<string, StandingsRow>();
   function ensure(team: string, crest?: string): StandingsRow {
     let row = table.get(team);
     if (!row) {
-      row = { team, crest, played: 0, won: 0, drawn: 0, lost: 0, points: 0, goalsFor: 0, goalsAgainst: 0 };
+      row = { team, crest, played: 0, won: 0, drawn: 0, lost: 0, points: 0, goalsFor: 0, goalsAgainst: 0, results: [] };
       table.set(team, row);
     } else if (!row.crest && crest) {
       row.crest = crest;
@@ -69,14 +73,14 @@ async function buildTable(season: string, throughMatchday?: number): Promise<Sta
     away.goalsAgainst += homeScore;
 
     if (homeScore > awayScore) {
-      home.won += 1; home.points += 3;
-      away.lost += 1;
+      home.won += 1; home.points += 3; home.results.push('W');
+      away.lost += 1; away.results.push('L');
     } else if (homeScore < awayScore) {
-      away.won += 1; away.points += 3;
-      home.lost += 1;
+      away.won += 1; away.points += 3; away.results.push('W');
+      home.lost += 1; home.results.push('L');
     } else {
-      home.drawn += 1; home.points += 1;
-      away.drawn += 1; away.points += 1;
+      home.drawn += 1; home.points += 1; home.results.push('D');
+      away.drawn += 1; away.points += 1; away.results.push('D');
     }
   }
 
@@ -110,9 +114,13 @@ export async function calculateCurrentTable(
 // pantalla de clasificación completa de la peña.
 export async function calculateFullCurrentTable(season: string): Promise<FullStandingsRow[]> {
   const rows = await buildTable(season);
-  return rows.map((row, index) => ({
-    ...row,
-    position: index + 1,
-    goalDifference: row.goalsFor - row.goalsAgainst,
-  }));
+  return rows.map((row, index) => {
+    const { results, ...rest } = row;
+    return {
+      ...rest,
+      position: index + 1,
+      goalDifference: row.goalsFor - row.goalsAgainst,
+      last5: results.slice(-5),
+    };
+  });
 }
