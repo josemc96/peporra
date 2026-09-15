@@ -338,6 +338,20 @@ export default function PredictionsTab() {
     return null;
   }, [sortedLaLigaMatches, sections]);
 
+  // Cuántos elementos hay que renderizar de entrada para que el partido objetivo ya esté
+  // medido en el primer render — sin esto, scrollToLocation falla en listas largas (a medida
+  // que avanza la temporada, el partido "actual" queda cada vez más lejos del principio) y
+  // la lista se queda en la Jornada 1 en vez de saltar directamente a donde toca.
+  const initialRenderCount = useMemo(() => {
+    if (!initialScrollTarget) return 40;
+    let count = 0;
+    for (let s = 0; s < initialScrollTarget.sectionIndex; s++) {
+      count += 1 + sections[s].data.length; // +1 por la cabecera "Jornada N" de la sección
+    }
+    count += 1 + initialScrollTarget.itemIndex + 1; // cabecera de la sección objetivo + colchón
+    return Math.min(count + 20, 200);
+  }, [initialScrollTarget, sections]);
+
   // Jornada "activa" para el banner de cartas: la filtrada si hay filtro, si no la del
   // partido más cercano/en curso (la misma a la que hace scroll el modo "Todos").
   const activeMatchday = filterMatchday ?? (
@@ -350,16 +364,23 @@ export default function PredictionsTab() {
     enabled: !!groupId && activeMatchday != null && competitionTab === 'la_liga',
   });
 
+  const isLoading = loadingMatches || loadingPredictions;
+
   useEffect(() => {
-    if (filterMatchday !== null || hasAutoScrolled.current || !initialScrollTarget) return;
+    // Ojo: mientras isLoading es true el SectionList ni siquiera se monta (más abajo hay un
+    // `return` anticipado), así que sectionListRef.current es null. Si este efecto marcase
+    // hasAutoScrolled=true en ese momento, el scroll real nunca se reintentaría al terminar
+    // de cargar y la lista se quedaría siempre en la Jornada 1.
+    if (isLoading || filterMatchday !== null || hasAutoScrolled.current || !initialScrollTarget) return;
     hasAutoScrolled.current = true;
-    // Se intenta dos veces: la lista puede no tener aún medidos los ítems lejanos en el
+    // Se intenta varias veces: la lista puede no tener aún medidos los ítems lejanos en el
     // primer intento (scrollToLocation falla en silencio en ese caso), así que se repite
-    // un poco después, cuando ya se ha renderizado más contenido.
+    // según se va renderizando más contenido.
     const t1 = setTimeout(() => scrollToTarget(initialScrollTarget, false), 80);
-    const t2 = setTimeout(() => scrollToTarget(initialScrollTarget, false), 500);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [filterMatchday, initialScrollTarget]);
+    const t2 = setTimeout(() => scrollToTarget(initialScrollTarget, false), 400);
+    const t3 = setTimeout(() => scrollToTarget(initialScrollTarget, false), 900);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [isLoading, filterMatchday, initialScrollTarget]);
 
   function selectJornada(day: number) {
     setJornadaMenuVisible(false);
@@ -380,7 +401,6 @@ export default function PredictionsTab() {
     return matches.filter((m) => m.competition === competitionTab);
   }, [matches, competitionTab, filterMatchday]);
 
-  const isLoading = loadingMatches || loadingPredictions;
   const showAllView = competitionTab === 'la_liga' && filterMatchday === null;
 
   if (!group) return null;
@@ -484,7 +504,7 @@ export default function PredictionsTab() {
             />
           )}
           contentContainerStyle={styles.list}
-          initialNumToRender={40}
+          initialNumToRender={initialRenderCount}
           onScrollToIndexFailed={() => {
             // El objetivo aún no está medido (offscreen) — se reintenta un poco después,
             // cuando ya se ha renderizado más contenido de la lista.
