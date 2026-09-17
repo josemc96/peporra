@@ -119,6 +119,9 @@ async function validatePlay(
       if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
         throw new AppError('params.amount debe ser un entero positivo', 400);
       }
+      if (amount % 2 !== 0) {
+        throw new AppError('params.amount debe ser un número par', 400);
+      }
       const config = await CardConfig.findOne({ group: deal.group, season: deal.season });
       if (config && amount > config.melaJuegoLimit) {
         throw new AppError(`La apuesta máxima es ${config.melaJuegoLimit} pts`, 400);

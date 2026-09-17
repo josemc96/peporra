@@ -190,7 +190,7 @@ export default function CardPlayScreen() {
     if (card === 'el_var') return !!selectedMatchId;
     if (card === 'me_la_juego') {
       const n = parseInt(betAmount, 10);
-      return !!selectedMatchId && !isNaN(n) && n >= 1 && n <= melaLimit;
+      return !!selectedMatchId && !isNaN(n) && n >= 1 && n <= melaLimit && n % 2 === 0;
     }
     if (card === 'rueda_prensa') return !!selectedMatchId && !!selectedRivalId;
     if (card === 'el_espia') return !!selectedMatchId;
@@ -347,7 +347,7 @@ export default function CardPlayScreen() {
           {/* me_la_juego: bet amount */}
           {card === 'me_la_juego' && selectedMatchId && (
             <>
-              <Text variant="titleSmall" style={styles.sectionTitle}>Apuesta (máx. {melaLimit} pts)</Text>
+              <Text variant="titleSmall" style={styles.sectionTitle}>Apuesta (par, máx. {melaLimit} pts)</Text>
               <TextInput
                 label="Puntos a apostar"
                 value={betAmount}
@@ -355,8 +355,13 @@ export default function CardPlayScreen() {
                 keyboardType="numeric"
                 mode="outlined"
                 dense
-                placeholder={`1 – ${melaLimit}`}
+                placeholder={`2 – ${melaLimit}`}
               />
+              {betAmount !== '' && !isNaN(parseInt(betAmount, 10)) && parseInt(betAmount, 10) % 2 !== 0 && (
+                <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 4 }}>
+                  Solo se admiten números pares
+                </Text>
+              )}
               <Divider style={styles.divider} />
             </>
           )}
