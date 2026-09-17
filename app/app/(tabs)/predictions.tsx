@@ -47,7 +47,11 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
 }) {
   const [showMissing, setShowMissing] = useState(false);
   const [showSpy, setShowSpy] = useState(false);
-  const isLocked = new Date() >= new Date(match.startTime);
+  // Aplazado antes de empezar: aunque su startTime antiguo ya haya pasado, sigue siendo
+  // editable — no se trata como si ya hubiera empezado — hasta que la API confirme fecha
+  // nueva (entonces vuelve a 'pending' y el startTime ya será el real).
+  const isPostponed = match.status === 'postponed';
+  const isLocked = !isPostponed && new Date() >= new Date(match.startTime);
   const hasPrediction = prediction !== undefined;
   const isFinished = match.status === 'finished';
   const isLive = isLocked && !isFinished;
@@ -95,6 +99,8 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
           </View>
           {isFinished ? (
             <Text variant="titleMedium" style={styles.scoreCenter}>{match.homeScore} - {match.awayScore}</Text>
+          ) : isPostponed ? (
+            <Text variant="labelSmall" style={styles.postponedIndicator}>APLAZADO</Text>
           ) : isLive && hasLiveScore ? (
             <Text variant="titleMedium" style={[styles.scoreCenter, styles.liveScore]}>{match.homeScore} - {match.awayScore}</Text>
           ) : isLocked ? (
@@ -115,7 +121,9 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
           )}
         </View>
         <View style={styles.dateRow}>
-          <Text variant="labelSmall" style={styles.dateText}>{formatDateTime(match.startTime)}</Text>
+          <Text variant="labelSmall" style={styles.dateText}>
+            {isPostponed ? 'Fecha por confirmar' : formatDateTime(match.startTime)}
+          </Text>
           {pressReveals.length > 0 && (
             <View style={styles.pressRevealCol}>
               {pressReveals.map((r, i) => (
@@ -336,7 +344,7 @@ export default function PredictionsTab() {
     const now = new Date();
     // Prioridad: un partido en curso ahora mismo > el próximo por empezar > el último jugado.
     let targetId = sortedLaLigaMatches.find(
-      (m) => m.status !== 'finished' && new Date(m.startTime) <= now
+      (m) => m.status !== 'finished' && m.status !== 'postponed' && new Date(m.startTime) <= now
     )?._id;
     if (!targetId) targetId = sortedLaLigaMatches.find((m) => new Date(m.startTime) > now)?._id;
     if (!targetId) targetId = sortedLaLigaMatches[sortedLaLigaMatches.length - 1]._id;
@@ -623,6 +631,7 @@ const styles = StyleSheet.create({
   scoreCenter: { fontWeight: '700', minWidth: 48, textAlign: 'center' },
   predCenter: { fontWeight: '600', minWidth: 48, textAlign: 'center', opacity: 0.75 },
   liveIndicator: { color: '#8892A4', fontWeight: '700', minWidth: 64, textAlign: 'center' },
+  postponedIndicator: { color: colors.gold, fontWeight: '700', minWidth: 64, textAlign: 'center' },
   liveScore: { color: '#EF4444' },
   liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' },

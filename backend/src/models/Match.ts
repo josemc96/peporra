@@ -37,7 +37,7 @@ const matchSchema = new Schema<IMatch>({
   startTime: { type: Date, required: true },
   homeScore: { type: Number },
   awayScore: { type: Number },
-  status: { type: String, enum: ['pending', 'finished'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'finished', 'postponed'], default: 'pending' },
   // id del partido en football-data.org — permite upsert fiable al sincronizar (los
   // partidos de Copa del Rey/Supercopa, dados de alta a mano, no tienen externalId.
   externalId: { type: Number, unique: true, sparse: true },

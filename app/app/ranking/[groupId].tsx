@@ -106,7 +106,7 @@ export default function RankingScreen() {
     const laLiga = matches.filter((m) => m.competition === 'la_liga' && m.matchday != null);
     if (laLiga.length === 0) return null;
     const now = new Date();
-    const live = laLiga.find((m) => m.status !== 'finished' && new Date(m.startTime) <= now);
+    const live = laLiga.find((m) => m.status !== 'finished' && m.status !== 'postponed' && new Date(m.startTime) <= now);
     if (live) return live.matchday!;
     const upcoming = [...laLiga]
       .filter((m) => new Date(m.startTime) > now)

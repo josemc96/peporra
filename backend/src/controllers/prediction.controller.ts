@@ -34,7 +34,9 @@ export async function upsertPrediction(req: Request, res: Response): Promise<voi
   if (!match) {
     throw new AppError('Partido no encontrado', 404);
   }
-  if (new Date() >= match.startTime) {
+  // Aplazado antes del kickoff: aunque su startTime antiguo ya haya pasado, sigue siendo
+  // editable hasta que se confirme la nueva fecha (el sync lo pasa a "pending" entonces).
+  if (match.status !== 'postponed' && new Date() >= match.startTime) {
     throw new AppError('Ya no se puede predecir este partido, ya ha empezado', 409);
   }
 

@@ -16,11 +16,22 @@ function toSeasonStartYear(season: string): string {
   return season.split('-')[0];
 }
 
-// Solo confirma "finished" cuando la API lo dice; si no, no se incluye el campo en el
-// update (queda `undefined` y Mongoose lo omite del $set) para no pisar un partido que ya
-// se marcó "finished" a mano si football-data.org va con retraso en reflejar el resultado.
-function toMatchStatus(apiStatus: FootballDataMatch['status']): MatchStatus | undefined {
-  return apiStatus === 'FINISHED' ? 'finished' : undefined;
+// Solo confirma "finished" cuando la API lo dice; nunca se pisa un partido que ya se marcó
+// "finished" (a mano o por sync previo) si football-data.org va con retraso reflejando el
+// resultado. "postponed" refleja un aplazamiento ANTES del kickoff (la API aún no tiene la
+// nueva fecha) — se recupera a "pending" en cuanto la API vuelve a dar una fecha confirmada
+// (SCHEDULED/TIMED). El resto de estados (IN_PLAY/PAUSED/SUSPENDED/CANCELLED) no tienen
+// mapeo propio todavía: se dejan `undefined` (sin tocar) — un partido suspendido a mitad de
+// juego, por ejemplo, ya queda bloqueado igualmente porque su `startTime` real ya pasó.
+function toMatchStatus(
+  apiStatus: FootballDataMatch['status'],
+  existingStatus: MatchStatus | undefined
+): MatchStatus | undefined {
+  if (existingStatus === 'finished' && apiStatus !== 'FINISHED') return undefined;
+  if (apiStatus === 'FINISHED') return 'finished';
+  if (apiStatus === 'POSTPONED') return 'postponed';
+  if (apiStatus === 'SCHEDULED' || apiStatus === 'TIMED') return 'pending';
+  return undefined;
 }
 
 export async function syncLaLigaMatches(season: string): Promise<SyncMatchesResult> {
@@ -59,7 +70,7 @@ export async function syncLaLigaMatches(season: string): Promise<SyncMatchesResu
         startTime: new Date(apiMatch.utcDate),
         homeScore: newHome,
         awayScore: newAway,
-        status: toMatchStatus(apiMatch.status),
+        status: toMatchStatus(apiMatch.status, existing?.status),
       },
       { upsert: true }
     );

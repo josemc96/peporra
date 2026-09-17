@@ -13,7 +13,7 @@ export interface Match {
   startTime: string;
   homeScore?: number;
   awayScore?: number;
-  status: 'pending' | 'finished';
+  status: 'pending' | 'finished' | 'postponed';
   realQualifier?: 'home' | 'away';
 }
 

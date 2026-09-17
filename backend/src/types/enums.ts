@@ -1,6 +1,8 @@
 export type UserRole = 'user' | 'admin';
 
-export type MatchStatus = 'pending' | 'finished';
+// 'postponed': football-data.org lo marcó POSTPONED antes del kickoff (aún no se sabe
+// cuándo se juega de verdad) — se trata como editable, no como "ya empezado".
+export type MatchStatus = 'pending' | 'finished' | 'postponed';
 
 export type PredictionStatus = 'pending' | 'scored';
 
