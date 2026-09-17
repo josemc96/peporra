@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Avatar, Button, Divider, Snackbar, Surface, Text, useTheme } from 'react-native-paper';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { matchVisibilityApi } from '@/api/matchVisibility';
@@ -191,6 +191,18 @@ export default function MatchPredictionViewScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
       {/* Header del partido */}
       <Surface style={styles.matchHeader} elevation={1}>
+        {matchdayNum != null && (
+          <Text
+            variant="labelSmall"
+            style={styles.matchdayLink}
+            onPress={() => router.push({
+              pathname: '/(tabs)/predictions' as never,
+              params: { matchday: String(matchdayNum) },
+            })}
+          >
+            Jornada {matchdayNum} ›
+          </Text>
+        )}
         <Text variant="labelSmall" style={styles.date}>{formatDate(startTime)}</Text>
         <View style={styles.teamsRow}>
           <View style={styles.teamCell}>
@@ -331,6 +343,7 @@ const styles = StyleSheet.create({
   matchHeader: { borderRadius: 10, padding: 16, gap: 8 },
   recalcBtn: { alignSelf: 'center' },
   date: { textAlign: 'center', opacity: 0.5, textTransform: 'capitalize' },
+  matchdayLink: { textAlign: 'center', color: '#C04A1A', fontWeight: '700' },
   teamsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   positionsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   teamPositionBadge: {

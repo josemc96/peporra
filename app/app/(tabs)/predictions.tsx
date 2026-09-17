@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, ScrollView, SectionList, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator, Button, Card, Chip,
-  Menu, SegmentedButtons, Text,
+  Modal, Portal, SegmentedButtons, Text,
 } from 'react-native-paper';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
 import { predictionsApi, Match, Prediction } from '@/api/predictions';
@@ -86,7 +86,7 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
   }
 
   return (
-    <Card style={styles.matchCard} onPress={isLocked ? openView : undefined}>
+    <Card style={styles.matchCard} onPress={isLocked ? openView : openEditor}>
       <Card.Content style={styles.cardContent}>
         <View style={styles.teamsRow}>
           <View style={styles.teamCell}>
@@ -129,9 +129,13 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
         <View style={styles.predictionRow}>
           <View style={styles.predictionRowLeft}>
             {!isLocked ? (
-              <Button mode="text" compact onPress={openEditor} style={styles.predBtn}>
-                {hasPrediction ? 'Editar' : 'Predecir'}
-              </Button>
+              hasPrediction ? (
+                <Text variant="bodySmall" style={styles.predictionText}>
+                  Tu predicción: {prediction.predictedHome} - {prediction.predictedAway}
+                </Text>
+              ) : (
+                <Text variant="bodySmall" style={styles.noPrediction}>Toca para predecir</Text>
+              )
             ) : hasPrediction ? (
               <Text variant="bodySmall" style={[styles.predictionText, { color: predTextColor }]}>
                 Tu predicción: {prediction.predictedHome} - {prediction.predictedAway}
@@ -198,10 +202,15 @@ export default function PredictionsTab() {
   const { group } = useCurrentGroup();
   const groupId = group?.id ?? '';
   const season = group?.season ?? '';
+  // Permite llegar aquí ya filtrado a una jornada concreta desde otra pantalla
+  // (ej. el botón de "Jornada N" en la vista de un partido).
+  const params = useLocalSearchParams<{ matchday?: string }>();
   const [competitionTab, setCompetitionTab] = useState<Competition>('la_liga');
   // null = viendo todos los partidos en orden cronológico; un número = filtrado a esa jornada.
-  const [filterMatchday, setFilterMatchday] = useState<number | null>(null);
-  const [jornadaMenuVisible, setJornadaMenuVisible] = useState(false);
+  const [filterMatchday, setFilterMatchday] = useState<number | null>(
+    params.matchday ? parseInt(params.matchday, 10) : null
+  );
+  const [jornadaModalVisible, setJornadaModalVisible] = useState(false);
   const sectionListRef = useRef<SectionList<Match, MatchdaySection>>(null);
   const hasAutoScrolled = useRef(false);
   const lastScrollTarget = useRef<{ sectionIndex: number; itemIndex: number } | null>(null);
@@ -367,6 +376,15 @@ export default function PredictionsTab() {
   const isLoading = loadingMatches || loadingPredictions;
 
   useEffect(() => {
+    // La pestaña de Predicciones no se desmonta al navegar entre tabs, así que si ya estaba
+    // montada y llegamos aquí de nuevo con un matchday distinto en la URL (ej. desde el botón
+    // "Jornada N" de la vista de un partido), el useState inicial no lo recoge por sí solo.
+    if (!params.matchday) return;
+    const day = parseInt(params.matchday, 10);
+    if (!isNaN(day)) setFilterMatchday(day);
+  }, [params.matchday]);
+
+  useEffect(() => {
     // Ojo: mientras isLoading es true el SectionList ni siquiera se monta (más abajo hay un
     // `return` anticipado), así que sectionListRef.current es null. Si este efecto marcase
     // hasAutoScrolled=true en ese momento, el scroll real nunca se reintentaría al terminar
@@ -383,7 +401,7 @@ export default function PredictionsTab() {
   }, [isLoading, filterMatchday, initialScrollTarget]);
 
   function selectJornada(day: number) {
-    setJornadaMenuVisible(false);
+    setJornadaModalVisible(false);
     setFilterMatchday(day);
   }
 
@@ -425,29 +443,13 @@ export default function PredictionsTab() {
       {/* Ir a jornada / título+volver, y banner de carta — todo en una sola fila (solo La Liga) */}
       {competitionTab === 'la_liga' && (
         <View style={styles.jornadaBar}>
-          {filterMatchday != null ? (
-            <Text variant="titleMedium" style={styles.matchdayTitle}>Jornada {filterMatchday}</Text>
-          ) : (
-            <Menu
-              visible={jornadaMenuVisible}
-              onDismiss={() => setJornadaMenuVisible(false)}
-              anchor={
-                <Button
-                  mode="outlined" compact icon="menu-down"
-                  contentStyle={styles.jornadaMenuBtnContent}
-                  onPress={() => setJornadaMenuVisible(true)}
-                >
-                  Ir a jornada
-                </Button>
-              }
-            >
-              <ScrollView style={styles.jornadaMenuScroll}>
-                {matchdays.map((day) => (
-                  <Menu.Item key={day} title={`Jornada ${day}`} onPress={() => selectJornada(day)} />
-                ))}
-              </ScrollView>
-            </Menu>
-          )}
+          <Button
+            mode="contained-tonal" compact icon="calendar-month"
+            contentStyle={styles.jornadaBtnContent}
+            onPress={() => setJornadaModalVisible(true)}
+          >
+            {(filterMatchday ?? activeMatchday) != null ? `Jornada ${filterMatchday ?? activeMatchday}` : 'Ir a jornada'}
+          </Button>
 
           {activeMatchday != null && groupId && myDeal?.deal && myDeal.deal.status !== 'expired' && (
             <Button
@@ -542,6 +544,33 @@ export default function PredictionsTab() {
           }
         />
       )}
+
+      <Portal>
+        <Modal
+          visible={jornadaModalVisible}
+          onDismiss={() => setJornadaModalVisible(false)}
+          contentContainerStyle={styles.jornadaModal}
+        >
+          <Text variant="titleMedium" style={styles.jornadaModalTitle}>Ir a jornada</Text>
+          <ScrollView contentContainerStyle={styles.jornadaGrid}>
+            {matchdays.map((day) => {
+              const active = day === (filterMatchday ?? activeMatchday);
+              return (
+                <Chip
+                  key={day}
+                  mode={active ? 'flat' : 'outlined'}
+                  selected={active}
+                  style={[styles.jornadaChip, active && styles.jornadaChipActive]}
+                  textStyle={active ? styles.jornadaChipActiveText : undefined}
+                  onPress={() => selectJornada(day)}
+                >
+                  {day}
+                </Chip>
+              );
+            })}
+          </ScrollView>
+        </Modal>
+      </Portal>
     </View>
   );
 }
@@ -560,10 +589,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8,
     paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8,
   },
-  matchdayTitle: { fontWeight: '700' },
-  jornadaMenuBtnContent: { flexDirection: 'row-reverse' },
-  jornadaMenuScroll: { maxHeight: 360 },
+  jornadaBtnContent: { flexDirection: 'row-reverse' },
   volverBtn: { marginLeft: 'auto' },
+  jornadaModal: {
+    backgroundColor: colors.surface, borderRadius: 14, marginHorizontal: 20,
+    padding: 16, maxHeight: '75%',
+  },
+  jornadaModalTitle: { fontWeight: '700', marginBottom: 12 },
+  jornadaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 4 },
+  jornadaChip: { minWidth: 52, alignItems: 'center' },
+  jornadaChipActive: { backgroundColor: colors.primary },
+  jornadaChipActiveText: { color: '#fff', fontWeight: '700' },
   sectionHeader: {
     backgroundColor: colors.bg, paddingHorizontal: 4, paddingTop: 14, paddingBottom: 6,
   },
@@ -591,7 +627,6 @@ const styles = StyleSheet.create({
   liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' },
   liveBadgeText: { color: '#EF4444', fontWeight: '700' },
-  predBtn: { marginLeft: -8 },
   whoMissingBtn: { marginRight: -8 },
   spyBtn: { minWidth: 0 },
   missingBox: { marginTop: 2 },
