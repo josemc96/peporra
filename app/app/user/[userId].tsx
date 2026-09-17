@@ -6,8 +6,10 @@ import { useQuery } from '@tanstack/react-query';
 
 import { awardPredictionsApi } from '@/api/awardPredictions';
 import { adminGroupApi } from '@/api/adminGroup';
+import { penaltiesApi } from '@/api/penalties';
 import { apiFetch } from '@/api/client';
 import { MatchdaySummarySection } from '@/components/MatchdaySummary';
+import { colors } from '@/config/theme';
 
 const AVATAR_COLORS = [
   '#1565C0', '#2E7D32', '#6A1B9A', '#AD1457',
@@ -77,6 +79,18 @@ export default function UserProfileScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: debt } = useQuery({
+    queryKey: ['debt', groupId, season],
+    queryFn: () => penaltiesApi.getDebt(groupId, season),
+    enabled: !!groupId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const userDebt = useMemo(() => {
+    if (!debt || !userId) return 0;
+    return debt.find((d) => d.user.id === userId)?.total ?? 0;
+  }, [debt, userId]);
+
   const pichichi = useMemo(
     () => groupPichichi?.find((p) => p.user._id === userId),
     [groupPichichi, userId]
@@ -110,6 +124,12 @@ export default function UserProfileScreen() {
           <StatCard value={exactScores ?? '—'} label="Exactos" />
           <StatCard value={position && total ? `${position}/${total}` : '—'} label="Posición" />
         </View>
+        {userDebt > 0 && (
+          <Surface style={styles.debtCard} elevation={1}>
+            <Text variant="labelSmall" style={styles.debtLabel}>💸 Deuda acumulada en la peña</Text>
+            <Text variant="headlineMedium" style={styles.debtAmount}>{userDebt}€</Text>
+          </Surface>
+        )}
       </View>
 
       {groupId && userId && (
@@ -158,11 +178,14 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center', gap: 8, paddingVertical: 36, paddingHorizontal: 24 },
   alias: { fontWeight: '700', marginTop: 4 },
 
-  statsSection: { paddingHorizontal: 20, paddingTop: 20 },
+  statsSection: { paddingHorizontal: 20, paddingTop: 20, gap: 12 },
   statsRow: { flexDirection: 'row', gap: 10 },
   statCard: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingVertical: 16, gap: 4 },
   statValue: { fontWeight: '700' },
   statLabel: { opacity: 0.55 },
+  debtCard: { borderRadius: 12, padding: 16, alignItems: 'center', gap: 4, backgroundColor: colors.errorDim },
+  debtLabel: { color: colors.debt, opacity: 0.9 },
+  debtAmount: { color: colors.debt, fontWeight: '700' },
 
   divider: { marginHorizontal: 20, marginVertical: 20 },
 
