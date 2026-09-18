@@ -20,6 +20,7 @@ import matchdaySummaryRoutes from './routes/matchdaySummary.routes';
 import standingsTableRoutes from './routes/standingsTable.routes';
 import { getMatchPredictionVisibility } from './controllers/matchPredictionVisibility.controller';
 import { getGroupAwardPredictions } from './controllers/awardPrediction.controller';
+import { getGroupStandingsPredictions } from './controllers/standingsPrediction.controller';
 import { isSeasonLocked, isVueltaStarted } from './services/season.service';
 import { requireAuth } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/errorHandler';
@@ -60,6 +61,7 @@ app.use('/api/groups/:groupId/matchday-summary', matchdaySummaryRoutes);
 app.use('/api/standings-table', standingsTableRoutes);
 app.get('/api/groups/:groupId/matches/:matchId/predictions', requireAuth, getMatchPredictionVisibility);
 app.get('/api/groups/:groupId/award-predictions', requireAuth, getGroupAwardPredictions);
+app.get('/api/groups/:groupId/standings-predictions', requireAuth, getGroupStandingsPredictions);
 
 app.use(errorHandler);
 

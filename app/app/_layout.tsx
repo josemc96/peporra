@@ -40,7 +40,7 @@ const OPT_RANKING        = { title: 'Ranking' } as const;
 const OPT_STANDINGS      = { title: 'Clasificación' } as const;
 const OPT_STANDINGS_TABLE = { title: 'Tabla de La Liga' } as const;
 const OPT_AWARDS         = { title: 'Premios' } as const;
-const OPT_BETS           = { title: 'Apuestas de temporada' } as const;
+const OPT_PREMIOS        = { title: 'Premios' } as const;
 const OPT_KNOCKOUT       = { title: 'Copa / Supercopa' } as const;
 const OPT_ADMIN          = { title: 'Panel de admin' } as const;
 const OPT_ADMIN_GLOBAL   = { title: 'Admin global' } as const;
@@ -114,7 +114,7 @@ function RootLayoutNav() {
                   <Stack.Screen name="standings-prediction/[season]" options={OPT_STANDINGS} />
                   <Stack.Screen name="standings-table/[season]"  options={OPT_STANDINGS_TABLE} />
                   <Stack.Screen name="award-prediction/[season]" options={OPT_AWARDS} />
-                  <Stack.Screen name="bets/[groupId]"            options={OPT_BETS} />
+                  <Stack.Screen name="premios/[groupId]"         options={OPT_PREMIOS} />
                   <Stack.Screen name="knockout/[season]"         options={OPT_KNOCKOUT} />
                   <Stack.Screen name="admin/[groupId]"           options={OPT_ADMIN} />
                   <Stack.Screen name="admin/global"              options={OPT_ADMIN_GLOBAL} />

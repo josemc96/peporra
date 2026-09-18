@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { StandingsPrediction } from '../models/StandingsPrediction';
 import { AppError } from '../utils/AppError';
-import { isSeasonLocked } from '../services/season.service';
+import { isSeasonLocked, isVueltaStarted } from '../services/season.service';
+import { requireGroupMember } from '../services/groupAuth.service';
+import { StandingsPhase } from '../types/enums';
 
 interface TableEntryInput {
   position?: unknown;
@@ -48,8 +50,16 @@ export async function upsertStandingsPrediction(req: Request, res: Response): Pr
 
   const parsedTable = validatePredictedTable(predictedTable);
 
-  if (await isSeasonLocked(season)) {
-    throw new AppError('La temporada ya ha empezado, no se pueden enviar predicciones de clasificación', 409);
+  // La Ida se bloquea al empezar la Liga (J1); la Vuelta se bloquea aparte, al empezar
+  // la propia vuelta (J19) — no tiene sentido cerrarla meses antes de que arranque.
+  const locked = phase === 'ida' ? await isSeasonLocked(season) : await isVueltaStarted(season);
+  if (locked) {
+    throw new AppError(
+      phase === 'ida'
+        ? 'La Liga ya ha empezado, no se puede enviar la predicción de la Ida'
+        : 'La vuelta ya ha empezado, no se puede enviar la predicción de la Vuelta',
+      409
+    );
   }
 
   const prediction = await StandingsPrediction.findOneAndUpdate(
@@ -78,4 +88,42 @@ export async function getStandingsPrediction(req: Request, res: Response): Promi
 
   const prediction = await StandingsPrediction.findOne({ user: req.user!.id, season, phase });
   res.json({ prediction: prediction ?? null });
+}
+
+export async function getGroupStandingsPredictions(req: Request, res: Response): Promise<void> {
+  const groupId = String(req.params.groupId);
+  const { season, phase } = req.query as { season?: string; phase?: string };
+
+  if (!season) throw new AppError('season es obligatorio', 400);
+  if (phase && phase !== 'ida' && phase !== 'vuelta') {
+    throw new AppError('phase debe ser "ida" o "vuelta"', 400);
+  }
+
+  const group = await requireGroupMember(groupId, req.user!.id);
+
+  // Igual que con los Premios: no se revela la predicción de un miembro hasta que ya no
+  // se pueda editar — la Ida se revela al empezar la temporada (J1), pero la Vuelta se
+  // guarda desde el principio y no debe verse hasta que empiece de verdad (J19), aunque
+  // la temporada ya esté en marcha.
+  const [seasonLocked, vueltaStarted] = await Promise.all([
+    isSeasonLocked(season),
+    isVueltaStarted(season),
+  ]);
+  const revealablePhases: StandingsPhase[] = [
+    ...(seasonLocked ? (['ida'] as StandingsPhase[]) : []),
+    ...(vueltaStarted ? (['vuelta'] as StandingsPhase[]) : []),
+  ];
+  const phasesToQuery: StandingsPhase[] = phase
+    ? (revealablePhases.includes(phase as StandingsPhase) ? [phase as StandingsPhase] : [])
+    : revealablePhases;
+
+  if (phasesToQuery.length === 0) {
+    res.json({ predictions: [] });
+    return;
+  }
+
+  const predictions = await StandingsPrediction.find({
+    user: { $in: group.members }, season, phase: { $in: phasesToQuery },
+  }).populate('user', 'alias email');
+  res.json({ predictions });
 }

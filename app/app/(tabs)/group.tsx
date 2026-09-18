@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator, Avatar, Button, Chip, IconButton,
-  Surface, Text,
+  Menu, Surface, Text,
 } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -93,6 +93,7 @@ export default function GroupTab() {
   const qc = useQueryClient();
   const [rankingView, setRankingView] = useState<'matchday' | 'season'>('matchday');
   const [matchday, setMatchday] = useState(1);
+  const [betsMenuVisible, setBetsMenuVisible] = useState(false);
   const hasSetCurrentMatchday = useRef(false);
 
   const groupId = group?.id ?? '';
@@ -311,12 +312,49 @@ export default function GroupTab() {
       <Surface style={styles.footer} elevation={3}>
         <View style={styles.footerActions}>
           {(hasStandings || hasPremios) && (
-            <Button
-              compact mode="text" icon="trophy-outline"
-              onPress={() => router.push({ pathname: '/bets/[groupId]' as never, params: { groupId, season } })}
+            <Menu
+              visible={betsMenuVisible}
+              onDismiss={() => setBetsMenuVisible(false)}
+              anchor={
+                <Button
+                  compact mode="text" icon="trophy-outline"
+                  onPress={() => {
+                    // Si solo hay una opción activa, no hace falta el desplegable —
+                    // se va directo a su vista.
+                    if (hasPremios && !hasStandings) {
+                      router.push({ pathname: '/premios/[groupId]' as never, params: { groupId, season } });
+                    } else if (hasStandings && !hasPremios) {
+                      router.push({ pathname: '/standings-prediction/[season]' as never, params: { groupId, season } });
+                    } else {
+                      setBetsMenuVisible(true);
+                    }
+                  }}
+                >
+                  Apuestas
+                </Button>
+              }
             >
-              Apuestas
-            </Button>
+              {hasPremios && (
+                <Menu.Item
+                  leadingIcon="trophy"
+                  title="Premios"
+                  onPress={() => {
+                    setBetsMenuVisible(false);
+                    router.push({ pathname: '/premios/[groupId]' as never, params: { groupId, season } });
+                  }}
+                />
+              )}
+              {hasStandings && (
+                <Menu.Item
+                  leadingIcon="format-list-numbered"
+                  title="Clasificación (Ida/Vuelta)"
+                  onPress={() => {
+                    setBetsMenuVisible(false);
+                    router.push({ pathname: '/standings-prediction/[season]' as never, params: { groupId, season } });
+                  }}
+                />
+              )}
+            </Menu>
           )}
           {isGroupAdmin && (
             <Button
@@ -375,6 +413,6 @@ const styles = StyleSheet.create({
   emptyText: { textAlign: 'center', opacity: 0.5, marginTop: 32 },
 
   // Footer
-  footer: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 8, paddingVertical: 4 },
-  footerActions: { flexDirection: 'row', gap: 4 },
+  footer: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 4 },
+  footerActions: { flex: 1, flexDirection: 'row', justifyContent: 'space-evenly' },
 });

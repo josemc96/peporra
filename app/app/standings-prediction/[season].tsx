@@ -15,17 +15,42 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 
 import { standingsPredictionsApi } from '@/api/standingsPredictions';
+import { apiFetch } from '@/api/client';
+import { StandingsPredictionsSection } from '@/components/StandingsPredictionsSection';
 
 type Phase = 'ida' | 'vuelta';
 
 export default function StandingsPredictionScreen() {
-  const { season } = useLocalSearchParams<{ season: string }>();
+  const { season, groupId } = useLocalSearchParams<{ season: string; groupId?: string }>();
   const theme = useTheme();
   const qc = useQueryClient();
 
+  const { data: seasonStatus } = useQuery({
+    queryKey: ['season-locked', season],
+    queryFn: () => apiFetch<{ locked: boolean; vueltaStarted: boolean }>(
+      `/season/is-locked?season=${encodeURIComponent(season)}`
+    ),
+    enabled: !!season,
+    staleTime: 5 * 60 * 1000,
+  });
+  const isSeasonLocked = seasonStatus?.locked ?? false;
+  const isVueltaStarted = seasonStatus?.vueltaStarted ?? false;
+  // La Ida deja de ser editable al empezar la Liga (J1), la Vuelta al empezar la vuelta
+  // (J19) — cada una con su propio cierre, igual que en el backend.
+  const isIdaEditable = !isSeasonLocked;
+  const isVueltaEditable = !isVueltaStarted;
+
+  const [view, setView] = useState<'mine' | 'group'>('mine');
   const [phase, setPhase] = useState<Phase>('ida');
   const [teamOrder, setTeamOrder] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+
+  // Si la fase seleccionada ya se cerró pero la otra sigue abierta, salta a esa —
+  // así "Mi predicción" siempre muestra algo editable si todavía queda algo por editar.
+  useEffect(() => {
+    if (phase === 'ida' && !isIdaEditable && isVueltaEditable) setPhase('vuelta');
+    else if (phase === 'vuelta' && !isVueltaEditable && isIdaEditable) setPhase('ida');
+  }, [isIdaEditable, isVueltaEditable, phase]);
 
   const { data: teams, isLoading: teamsLoading } = useQuery({
     queryKey: ['la-liga-teams', season],
@@ -109,31 +134,85 @@ export default function StandingsPredictionScreen() {
     );
   }
 
+  const hasAnythingEditable = isIdaEditable || isVueltaEditable;
+  // Sin nada editable (Ida cerrada en J1, Vuelta cerrada en J19) ya no tiene sentido la
+  // pestaña "Mi predicción" — se va directo a "Peña" hasta que acabe la temporada.
+  const showTabSwitcher = !!groupId && hasAnythingEditable;
+  const tabSwitcher = showTabSwitcher && (
+    <View style={styles.mainTabsRow}>
+      <Chip selected={view === 'mine'} onPress={() => setView('mine')} style={styles.chip} icon="pencil">
+        Mi predicción
+      </Chip>
+      <Chip selected={view === 'group'} onPress={() => setView('group')} style={styles.chip} icon="account-group">
+        Peña
+      </Chip>
+    </View>
+  );
+
+  // Vista "Peña": lista de las predicciones del resto de miembros, separada de la zona
+  // de edición de la propia predicción para no mezclarlas en el mismo scroll. También es
+  // el destino por defecto una vez no queda nada editable, aunque `view` siga en 'mine'.
+  if (groupId && (view === 'group' || !hasAnythingEditable)) {
+    return (
+      <View style={styles.root}>
+        {tabSwitcher}
+        <ScrollView style={styles.flatList}>
+          <StandingsPredictionsSection
+            groupId={groupId} season={season}
+            isSeasonLocked={isSeasonLocked} isVueltaStarted={isVueltaStarted}
+          />
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // Sin peña asociada y sin nada editable: no hay ningún sitio donde mostrar nada.
+  if (!hasAnythingEditable) {
+    return (
+      <View style={styles.root}>
+        <View style={styles.centered}>
+          <Text style={styles.closedNote}>Ya no se puede editar ninguna predicción de clasificación.</Text>
+        </View>
+      </View>
+    );
+  }
+
   if (isLoading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" />
+      <View style={styles.root}>
+        {tabSwitcher}
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" />
+        </View>
       </View>
     );
   }
 
   if (!teams || teams.length === 0) {
     return (
-      <View style={styles.centered}>
-        <Text>No hay partidos sincronizados para esta temporada.</Text>
+      <View style={styles.root}>
+        {tabSwitcher}
+        <View style={styles.centered}>
+          <Text>No hay partidos sincronizados para esta temporada.</Text>
+        </View>
       </View>
     );
   }
 
   const header = (
     <>
+      {tabSwitcher}
       <View style={styles.phaseRow}>
-        <Chip selected={phase === 'ida'} onPress={() => setPhase('ida')} style={styles.chip}>
-          Ida (J19)
-        </Chip>
-        <Chip selected={phase === 'vuelta'} onPress={() => setPhase('vuelta')} style={styles.chip}>
-          Vuelta (J38)
-        </Chip>
+        {isIdaEditable && (
+          <Chip selected={phase === 'ida'} onPress={() => setPhase('ida')} style={styles.chip}>
+            Ida (J19)
+          </Chip>
+        )}
+        {isVueltaEditable && (
+          <Chip selected={phase === 'vuelta'} onPress={() => setPhase('vuelta')} style={styles.chip}>
+            Vuelta (J38)
+          </Chip>
+        )}
       </View>
       {!isLocked && (
         <Text variant="labelSmall" style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
@@ -207,6 +286,8 @@ export default function StandingsPredictionScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  closedNote: { textAlign: 'center', opacity: 0.6 },
+  mainTabsRow: { flexDirection: 'row', gap: 8, padding: 16, paddingBottom: 4 },
   phaseRow: { flexDirection: 'row', gap: 8, padding: 16, paddingBottom: 4 },
   chip: { flex: 1 },
   hint: { textAlign: 'center', paddingHorizontal: 16, paddingBottom: 8, opacity: 0.6 },

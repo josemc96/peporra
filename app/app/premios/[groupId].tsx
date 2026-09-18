@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Avatar, Button, Chip, Divider,
   List, Surface, Text, TextInput, useTheme,
 } from 'react-native-paper';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminGroupApi } from '@/api/adminGroup';
@@ -170,7 +170,7 @@ function PremiosSection({
 
 // ─── Main screen ────────────────────────────────────────────────────────────
 
-export default function SeasonBetsScreen() {
+export default function PremiosScreen() {
   const { groupId, season } = useLocalSearchParams<{ groupId: string; season: string }>();
 
   const { data: settings } = useQuery({
@@ -189,59 +189,26 @@ export default function SeasonBetsScreen() {
   const isSeasonLocked = seasonStatus?.locked ?? false;
 
   const feats = settings?.enabledFeatures ?? [];
-  const hasStandings = feats.includes('standings');
   const hasPichichi = feats.includes('pichichi');
   const hasZamora = feats.includes('zamora');
-  const hasPremios = hasPichichi || hasZamora;
 
-  if (!hasStandings && !hasPremios) {
+  if (!hasPichichi && !hasZamora) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyText}>
-          Esta peña no tiene activada ninguna apuesta de temporada todavía.
-        </Text>
+        <Text style={styles.emptyText}>Esta peña no tiene activados los premios todavía.</Text>
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      {hasStandings && (
-        <>
-          <Text variant="titleSmall" style={styles.sectionTitle}>Clasificación (Ida / Vuelta)</Text>
-          <Surface style={styles.linkCard} elevation={1}>
-            <View style={styles.linkCardInfo}>
-              <Text variant="bodyMedium" style={styles.linkCardTitle}>
-                Predicción de la clasificación final
-              </Text>
-              <Text variant="bodySmall" style={styles.linkCardSubtitle}>
-                Ida (Jornada 19) y Vuelta (Jornada 38)
-              </Text>
-            </View>
-            <Button
-              mode="contained-tonal" compact icon="chevron-right"
-              onPress={() => router.push({ pathname: '/standings-prediction/[season]' as never, params: { season } })}
-            >
-              Abrir
-            </Button>
-          </Surface>
-        </>
-      )}
-
-      {hasStandings && hasPremios && <Divider style={styles.sectionDivider} />}
-
-      {hasPremios && (
-        <>
-          <Text variant="titleSmall" style={styles.sectionTitle}>Premios</Text>
-          <PremiosSection
-            groupId={groupId}
-            season={season}
-            isSeasonLocked={isSeasonLocked}
-            hasPichichi={hasPichichi}
-            hasZamora={hasZamora}
-          />
-        </>
-      )}
+      <PremiosSection
+        groupId={groupId}
+        season={season}
+        isSeasonLocked={isSeasonLocked}
+        hasPichichi={hasPichichi}
+        hasZamora={hasZamora}
+      />
     </ScrollView>
   );
 }
@@ -250,16 +217,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   container: { padding: 16, gap: 10, paddingBottom: 40 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, backgroundColor: colors.bg },
-  sectionTitle: { fontWeight: '700', opacity: 0.8 },
-  sectionDivider: { marginVertical: 6 },
-
-  linkCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderRadius: 10, padding: 14, gap: 10,
-  },
-  linkCardInfo: { flex: 1 },
-  linkCardTitle: { fontWeight: '700' },
-  linkCardSubtitle: { opacity: 0.6, marginTop: 2 },
 
   // Premios
   premiosContainer: { gap: 12 },

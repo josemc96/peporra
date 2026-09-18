@@ -124,10 +124,16 @@ Scripts de `backend/package.json`: `npm run dev` (tsx watch), `npm run build` (t
 - `PUT/GET /api/standings-predictions` (+ `GET /:season/:phase`) y
   `PUT/GET /api/award-predictions` (+ `GET /:season/:award`) — mismo patrón de upsert que
   `/api/predictions`, todas `requireAuth`
-- Bloqueo compartido (`src/services/season.service.ts`): se calcula el kickoff de la temporada
-  (el `startTime` más temprano entre los partidos de La Liga de esa `season`) y se bloquea el
-  `PUT` con 409 si `now >= kickoff` — **fijo, no configurable por el admin**, tal como estaba
-  definido. Si aún no hay partidos sincronizados para esa temporada, no se bloquea.
+- Bloqueo (`src/services/season.service.ts`, **fijo, no configurable por el admin**). Premios
+  usa un único bloqueo: `isSeasonLocked` calcula el kickoff de la temporada (el `startTime`
+  más temprano entre los partidos de La Liga de esa `season`) y bloquea el `PUT` con 409 si
+  `now >= kickoff`. Clasificación tiene un bloqueo **por fase**, cada una con su propio cierre:
+  Ida se bloquea en el kickoff de la temporada (igual que Premios) pero Vuelta se bloquea en
+  `isVueltaStarted` (kickoff de la jornada 19) — no tendría sentido cerrarla meses antes de que
+  empiece de verdad. Si aún no hay partidos sincronizados para esa temporada/jornada, no se
+  bloquea. El mismo par `locked`/`vueltaStarted` lo devuelve `GET /api/season/is-locked` y se
+  usa también para decidir cuándo se revela la predicción de cada fase al resto de la peña
+  (`GET /api/groups/:groupId/standings-predictions`, ver más abajo).
 - Validación de `predictedTable`: array no vacío de `{ position, team }`, posiciones enteras
   positivas sin duplicar, equipos sin duplicar (no se valida contra los 20 equipos reales de
   La Liga, solo consistencia estructural)

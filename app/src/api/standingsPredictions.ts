@@ -13,6 +13,15 @@ export interface StandingsPrediction {
   status: 'pending' | 'scored';
 }
 
+export interface GroupStandingsPrediction {
+  _id: string;
+  user: { _id: string; alias: string; email: string };
+  season: string;
+  phase: 'ida' | 'vuelta';
+  predictedTable: StandingsRow[];
+  status: 'pending' | 'scored';
+}
+
 export const standingsPredictionsApi = {
   get: (season: string, phase: 'ida' | 'vuelta') =>
     apiFetch<{ prediction: StandingsPrediction | null }>(
@@ -24,6 +33,11 @@ export const standingsPredictionsApi = {
       method: 'PUT',
       body: JSON.stringify({ season, phase, predictedTable }),
     }).then((r) => r.prediction),
+
+  getGroupPredictions: (groupId: string, season: string, phase?: 'ida' | 'vuelta') =>
+    apiFetch<{ predictions: GroupStandingsPrediction[] }>(
+      `/groups/${groupId}/standings-predictions?season=${encodeURIComponent(season)}${phase ? `&phase=${phase}` : ''}`
+    ).then((r) => r.predictions),
 
   listTeams: (season: string) =>
     apiFetch<{ matches: { homeTeam: string; awayTeam: string }[] }>(
