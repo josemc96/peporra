@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, ScrollView, SectionList, StyleSheet, View } from 'react-native';
 import {
-  ActivityIndicator, Button, Card, Chip,
+  ActivityIndicator, Button, Card, Chip, IconButton,
   Modal, Portal, SegmentedButtons, Text,
 } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -451,36 +451,43 @@ export default function PredictionsTab() {
       {/* Ir a jornada / título+volver, y banner de carta — todo en una sola fila (solo La Liga) */}
       {competitionTab === 'la_liga' && (
         <View style={styles.jornadaBar}>
-          <Button
-            mode="contained-tonal" compact icon="calendar-month"
-            contentStyle={styles.jornadaBtnContent}
-            onPress={() => setJornadaModalVisible(true)}
-          >
-            {(filterMatchday ?? activeMatchday) != null ? `Jornada ${filterMatchday ?? activeMatchday}` : 'Ir a jornada'}
-          </Button>
+          <View style={styles.jornadaBarSide}>
+            <IconButton
+              icon="calendar-month" mode="contained-tonal" size={18}
+              iconColor={colors.primary}
+              containerColor={colors.primaryDim}
+              onPress={() => setJornadaModalVisible(true)}
+            />
+          </View>
 
-          {activeMatchday != null && groupId && myDeal?.deal && myDeal.deal.status !== 'expired' && (
-            <Button
-              mode="contained-tonal"
-              compact icon={myDeal.deal.status === 'locked' ? 'lock' : 'cards-playing'}
-              onPress={() => router.push({
-                pathname: '/cards/[groupId]' as never,
-                params: { groupId, season, matchday: String(activeMatchday) },
-              })}
-              style={filterMatchday == null ? styles.cardBannerPushRight : styles.cardBanner}
-            >
-              {myDeal.deal.status === 'locked'
-                ? '🔒 Carta bloqueada · Desbloquear'
-                : `${CARD_EMOJI[myDeal.deal.card]} ${CARD_LABELS[myDeal.deal.card]}${myDeal.deal.status === 'pending' ? ' · Jugar' : ' · Jugada'}`
-              }
-            </Button>
-          )}
+          <View style={styles.jornadaBarCenter}>
+            {activeMatchday != null && groupId && myDeal?.deal && myDeal.deal.status !== 'expired' && (
+              <Button
+                mode="contained-tonal"
+                compact icon={myDeal.deal.status === 'locked' ? 'lock' : 'cards-playing'}
+                onPress={() => router.push({
+                  pathname: '/cards/[groupId]' as never,
+                  params: { groupId, season, matchday: String(activeMatchday) },
+                })}
+              >
+                {myDeal.deal.status === 'locked'
+                  ? '🔒 Carta bloqueada · Desbloquear'
+                  : `${CARD_EMOJI[myDeal.deal.card]} ${CARD_LABELS[myDeal.deal.card]}${myDeal.deal.status === 'pending' ? ' · Jugar' : ' · Jugada'}`
+                }
+              </Button>
+            )}
+          </View>
 
-          {filterMatchday != null && (
-            <Button mode="text" compact icon="arrow-left" onPress={clearFilter} style={styles.volverBtn}>
-              Volver
-            </Button>
-          )}
+          <View style={[styles.jornadaBarSide, styles.jornadaBarSideRight]}>
+            {filterMatchday != null && (
+              <IconButton
+                icon="arrow-left" mode="contained-tonal" size={18}
+                iconColor={colors.primary}
+                containerColor={colors.primaryDim}
+                onPress={clearFilter}
+              />
+            )}
+          </View>
         </View>
       )}
 
@@ -594,11 +601,12 @@ const styles = StyleSheet.create({
   },
 
   jornadaBar: {
-    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8,
   },
-  jornadaBtnContent: { flexDirection: 'row-reverse' },
-  volverBtn: { marginLeft: 'auto' },
+  jornadaBarSide: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  jornadaBarSideRight: { justifyContent: 'flex-end' },
+  jornadaBarCenter: { flexShrink: 1, alignItems: 'center' },
   jornadaModal: {
     backgroundColor: colors.surface, borderRadius: 14, marginHorizontal: 20,
     padding: 16, maxHeight: '75%',
@@ -613,8 +621,6 @@ const styles = StyleSheet.create({
   },
   sectionHeaderText: { fontWeight: '700', color: colors.primary },
 
-  cardBanner: {},
-  cardBannerPushRight: { marginLeft: 'auto' },
   list: { padding: 12, gap: 10, paddingBottom: 32 },
   emptyText: { textAlign: 'center', opacity: 0.5, marginTop: 40, fontStyle: 'italic' },
   matchCard: { width: '100%' },
