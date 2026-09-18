@@ -1,8 +1,12 @@
 import { Request, Response } from 'express';
+import { Types } from 'mongoose';
 import { StandingsPrediction } from '../models/StandingsPrediction';
 import { AppError } from '../utils/AppError';
 import { isSeasonLocked, isVueltaStarted } from '../services/season.service';
 import { requireGroupMember } from '../services/groupAuth.service';
+import { calculateCurrentTable } from '../services/standingsTable.service';
+import { resolveActiveRules } from '../services/rules/resolveActiveRules';
+import { ruleEvaluators } from '../services/rules/registry';
 import { StandingsPhase } from '../types/enums';
 
 interface TableEntryInput {
@@ -125,5 +129,25 @@ export async function getGroupStandingsPredictions(req: Request, res: Response):
   const predictions = await StandingsPrediction.find({
     user: { $in: group.members }, season, phase: { $in: phasesToQuery },
   }).populate('user', 'alias email');
-  res.json({ predictions });
+
+  // Puntos "si la clasificación se quedara así ahora mismo" — mismo cálculo que el job de
+  // puntuación real (services/rules) pero contra la tabla en vivo, no la ya cerrada en la
+  // jornada de corte de cada fase (que puede no haber llegado todavía).
+  const currentTable = await calculateCurrentTable(season);
+  const activeRules = await resolveActiveRules(group._id as Types.ObjectId, season, 'standings');
+
+  const predictionsWithLivePoints = predictions.map((prediction) => {
+    let livePoints = 0;
+    for (const active of activeRules) {
+      const evaluator = ruleEvaluators[active.key];
+      const occurrences = evaluator({
+        predictedTable: prediction.predictedTable,
+        realTable: currentTable,
+      } as never);
+      livePoints += occurrences * active.points;
+    }
+    return { ...prediction.toObject(), livePoints };
+  });
+
+  res.json({ predictions: predictionsWithLivePoints });
 }

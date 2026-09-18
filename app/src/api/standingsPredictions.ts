@@ -20,6 +20,8 @@ export interface GroupStandingsPrediction {
   phase: 'ida' | 'vuelta';
   predictedTable: StandingsRow[];
   status: 'pending' | 'scored';
+  // Puntos "si la clasificación se quedara así ahora mismo", contra la tabla en vivo.
+  livePoints: number;
 }
 
 export const standingsPredictionsApi = {

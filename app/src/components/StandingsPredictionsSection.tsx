@@ -25,6 +25,8 @@ interface MemberEntry {
   alias: string;
   ida?: StandingsRow[];
   vuelta?: StandingsRow[];
+  idaPoints?: number;
+  vueltaPoints?: number;
 }
 
 export function StandingsPredictionsSection({ groupId, season, isSeasonLocked, isVueltaStarted }: {
@@ -43,8 +45,8 @@ export function StandingsPredictionsSection({ groupId, season, isSeasonLocked, i
   const byUser = new Map<string, MemberEntry>();
   (predictions ?? []).forEach((p) => {
     const entry = byUser.get(p.user._id) ?? { userId: p.user._id, alias: p.user.alias };
-    if (p.phase === 'ida') entry.ida = p.predictedTable;
-    else entry.vuelta = p.predictedTable;
+    if (p.phase === 'ida') { entry.ida = p.predictedTable; entry.idaPoints = p.livePoints; }
+    else { entry.vuelta = p.predictedTable; entry.vueltaPoints = p.livePoints; }
     byUser.set(p.user._id, entry);
   });
   const members = Array.from(byUser.values()).sort((a, b) => a.alias.localeCompare(b.alias));
@@ -59,35 +61,56 @@ export function StandingsPredictionsSection({ groupId, season, isSeasonLocked, i
     <View style={styles.section}>
       <Text variant="titleSmall" style={styles.title}>Predicciones de la peña</Text>
       <View style={styles.list}>
-        {members.map((m) => (
-          <List.Accordion
-            key={m.userId}
-            title={m.alias}
-            expanded={!!expanded[m.userId]}
-            onPress={() => toggle(m.userId)}
-            style={styles.accordion}
-            titleStyle={styles.accordionTitle}
-          >
-            <View style={styles.phaseBlock}>
-              <Text variant="labelMedium" style={styles.phaseLabel}>Ida (J19)</Text>
-              {m.ida ? (
-                <TeamOrderList rows={m.ida} />
-              ) : (
-                <Text variant="bodySmall" style={styles.noPred}>Sin predicción</Text>
-              )}
-            </View>
-            <View style={styles.phaseBlock}>
-              <Text variant="labelMedium" style={styles.phaseLabel}>Vuelta (J38)</Text>
-              {!isVueltaStarted ? (
-                <Text variant="bodySmall" style={styles.noPred}>Se revela cuando empiece la vuelta (J19)</Text>
-              ) : m.vuelta ? (
-                <TeamOrderList rows={m.vuelta} />
-              ) : (
-                <Text variant="bodySmall" style={styles.noPred}>Sin predicción</Text>
-              )}
-            </View>
-          </List.Accordion>
-        ))}
+        {members.map((m) => {
+          const totalPoints = (m.idaPoints ?? 0) + (m.vueltaPoints ?? 0);
+          const summaryParts = [
+            m.ida ? `Ida: ${m.idaPoints ?? 0} pts` : null,
+            isVueltaStarted && m.vuelta ? `Vuelta: ${m.vueltaPoints ?? 0} pts` : null,
+          ].filter(Boolean);
+          const summary = summaryParts.length > 0
+            ? `${summaryParts.join(' · ')} · Total: ${totalPoints} pts`
+            : 'Ahora mismo: 0 pts';
+
+          return (
+            <List.Accordion
+              key={m.userId}
+              title={m.alias}
+              description={summary}
+              expanded={!!expanded[m.userId]}
+              onPress={() => toggle(m.userId)}
+              style={styles.accordion}
+              titleStyle={styles.accordionTitle}
+              descriptionStyle={styles.accordionDescription}
+            >
+              <View style={styles.phaseBlock}>
+                <View style={styles.phaseHeader}>
+                  <Text variant="labelMedium" style={styles.phaseLabel}>Ida (J19)</Text>
+                  {m.ida && <Text variant="labelSmall" style={styles.phasePoints}>{m.idaPoints ?? 0} pts ahora mismo</Text>}
+                </View>
+                {m.ida ? (
+                  <TeamOrderList rows={m.ida} />
+                ) : (
+                  <Text variant="bodySmall" style={styles.noPred}>Sin predicción</Text>
+                )}
+              </View>
+              <View style={styles.phaseBlock}>
+                <View style={styles.phaseHeader}>
+                  <Text variant="labelMedium" style={styles.phaseLabel}>Vuelta (J38)</Text>
+                  {isVueltaStarted && m.vuelta && (
+                    <Text variant="labelSmall" style={styles.phasePoints}>{m.vueltaPoints ?? 0} pts ahora mismo</Text>
+                  )}
+                </View>
+                {!isVueltaStarted ? (
+                  <Text variant="bodySmall" style={styles.noPred}>Se revela cuando empiece la vuelta (J19)</Text>
+                ) : m.vuelta ? (
+                  <TeamOrderList rows={m.vuelta} />
+                ) : (
+                  <Text variant="bodySmall" style={styles.noPred}>Sin predicción</Text>
+                )}
+              </View>
+            </List.Accordion>
+          );
+        })}
       </View>
     </View>
   );
@@ -99,12 +122,15 @@ const styles = StyleSheet.create({
   list: { borderRadius: 12, overflow: 'hidden', backgroundColor: colors.surface },
   accordion: { backgroundColor: colors.surface },
   accordionTitle: { fontWeight: '600' },
+  accordionDescription: { color: colors.gold },
 
   phaseBlock: {
     paddingHorizontal: 16, paddingBottom: 12,
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
   },
-  phaseLabel: { opacity: 0.6, fontWeight: '600', paddingTop: 10, paddingBottom: 4 },
+  phaseHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
+  phaseLabel: { opacity: 0.6, fontWeight: '600' },
+  phasePoints: { color: colors.gold, fontWeight: '600' },
   noPred: { opacity: 0.45, fontStyle: 'italic' },
 
   teamList: { gap: 2 },
