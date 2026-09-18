@@ -6,7 +6,6 @@ import {
 } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as Clipboard from 'expo-clipboard';
 
 import { rankingApi, RankingEntry } from '@/api/ranking';
 import { penaltiesApi, RankingEntry as MatchdayRankingEntry } from '@/api/penalties';
@@ -255,7 +254,6 @@ export default function GroupTab() {
   const [mainTab, setMainTab] = useState<MainTab>('ranking');
   const [rankingView, setRankingView] = useState<'matchday' | 'season'>('matchday');
   const [matchday, setMatchday] = useState(1);
-  const [copied, setCopied] = useState(false);
   const hasSetCurrentMatchday = useRef(false);
 
   const groupId = group?.id ?? '';
@@ -349,14 +347,6 @@ export default function GroupTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ranking', groupId, season] }),
   });
 
-  const copyCode = useCallback(async () => {
-    const code = groupDetail?.inviteCode;
-    if (!code) return;
-    await Clipboard.setStringAsync(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [groupDetail?.inviteCode]);
-
   const feats = settings?.enabledFeatures ?? [];
   const comps = settings?.enabledCompetitions ?? [];
   const hasStandings = feats.includes('standings');
@@ -376,25 +366,6 @@ export default function GroupTab() {
 
   const renderHeader = useCallback(() => (
     <View>
-      {/* Código de invitación */}
-      <Surface style={styles.codeBox} elevation={1}>
-        <View style={styles.codeRow}>
-          <View>
-            <Text variant="labelSmall" style={styles.codeLabel}>Código de invitación</Text>
-            <Text variant="titleMedium" style={styles.codeValue}>
-              {groupDetail?.inviteCode ?? '···'}
-            </Text>
-          </View>
-          <Button
-            mode="outlined" compact
-            icon={copied ? 'check' : 'content-copy'}
-            onPress={copyCode}
-          >
-            {copied ? 'Copiado' : 'Copiar'}
-          </Button>
-        </View>
-      </Surface>
-
       {/* Accesos rápidos */}
       <View style={styles.quickLinks}>
         <Button
@@ -469,7 +440,7 @@ export default function GroupTab() {
       )}
     </View>
   ), [
-    groupDetail, copied, copyCode, hasStandings, season, mainTab, hasPremios,
+    hasStandings, season, mainTab, hasPremios,
     groupId, isSeasonLocked, hasPichichi, hasZamora, rankingView, matchday, rankingIsLoading,
   ]);
 
@@ -552,12 +523,6 @@ export default function GroupTab() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   list: { padding: 12, gap: 8, paddingBottom: 8 },
-
-  // Código
-  codeBox: { borderRadius: 10, padding: 14, marginBottom: 10 },
-  codeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  codeLabel: { opacity: 0.6, marginBottom: 2 },
-  codeValue: { letterSpacing: 2, fontWeight: '700' },
 
   // Quick links
   quickLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },

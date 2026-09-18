@@ -95,7 +95,7 @@ export function GroupDetail({ groupId, onLeave }: Props) {
   });
 
   async function copyCode() {
-    if (!group) return;
+    if (!group?.inviteCode) return;
     await Clipboard.setStringAsync(group.inviteCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

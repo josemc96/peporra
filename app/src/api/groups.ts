@@ -17,12 +17,13 @@ export interface GroupSummary {
   createdAt: string;
 }
 
-// Detalle: admin y members populados
+// Detalle: admin y members populados. inviteCode solo llega si quien pregunta es el
+// admin de la peña (el backend lo omite para el resto de miembros).
 export interface GroupDetail {
   _id: string;
   name: string;
   season: string;
-  inviteCode: string;
+  inviteCode?: string;
   admin: GroupMember;
   members: GroupMember[];
   createdAt: string;

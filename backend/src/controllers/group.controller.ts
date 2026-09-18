@@ -124,5 +124,13 @@ export async function getGroup(req: Request, res: Response): Promise<void> {
     throw new AppError('No perteneces a esta peña', 403);
   }
 
-  res.json({ group });
+  // El código de invitación solo lo ve el admin de la peña (se gestiona desde su panel) —
+  // el resto de miembros ya se unieron a través de él, no necesitan volver a consultarlo.
+  const isGroupAdmin = group.admin._id!.toString() === userId;
+  const groupJson = group.toJSON() as Record<string, unknown>;
+  if (!isGroupAdmin) {
+    delete groupJson.inviteCode;
+  }
+
+  res.json({ group: groupJson });
 }

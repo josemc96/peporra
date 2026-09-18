@@ -15,6 +15,7 @@ import {
 } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Clipboard from 'expo-clipboard';
 
 import { adminGroupApi, RuleEntry, GroupFeature } from '@/api/adminGroup';
 import { adminMatchesApi } from '@/api/adminMatches';
@@ -146,6 +147,21 @@ export default function AdminPanelScreen() {
 
   const [tab, setTab] = useState<'rules' | 'multipliers' | 'matches' | 'penalties' | 'adjustments' | 'cards'>('rules');
 
+  // ── Código de invitación (solo visible aquí, en el panel de admin) ─────────
+  const [copied, setCopied] = useState(false);
+  const { data: groupDetail } = useQuery({
+    queryKey: ['group-detail', groupId],
+    queryFn: () => groupsApi.get(groupId),
+  });
+
+  async function copyCode() {
+    const code = groupDetail?.inviteCode;
+    if (!code) return;
+    await Clipboard.setStringAsync(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   // ── Rules ──────────────────────────────────────────────────────────────────
   const [localRules, setLocalRules] = useState<RuleEntry[] | null>(null);
   const [localComps, setLocalComps] = useState<('copa_del_rey' | 'supercopa')[] | null>(null);
@@ -236,6 +252,7 @@ export default function AdminPanelScreen() {
 
   // ── Matches (global admin only) ────────────────────────────────────────────
   const isGlobalAdmin = user?.role === 'admin';
+  const isGroupAdmin = !!groupDetail && !!user && groupDetail.admin._id === user.id;
   const [newCompetition, setNewCompetition] = useState<'copa_del_rey' | 'supercopa'>('copa_del_rey');
   const [newHome, setNewHome] = useState('');
   const [newAway, setNewAway] = useState('');
@@ -326,12 +343,6 @@ export default function AdminPanelScreen() {
   const [adjPoints, setAdjPoints] = useState('');
   const [adjMoney, setAdjMoney] = useState('');
   const [adjReason, setAdjReason] = useState('');
-
-  const { data: groupDetail } = useQuery({
-    queryKey: ['group-detail', groupId],
-    queryFn: () => groupsApi.get(groupId),
-    enabled: tab === 'adjustments',
-  });
 
   const { data: currentRanking } = useQuery({
     queryKey: ['ranking', groupId, season],
@@ -453,8 +464,37 @@ export default function AdminPanelScreen() {
     ...(isGlobalAdmin ? [{ key: 'matches' as const, label: 'Partidos' }] : []),
   ];
 
+  // Esta pantalla gestiona reglas/bote/cartas/código de invitación de la peña — solo su
+  // admin (o el admin global del sitio) debería poder entrar, aunque llegue por URL directa.
+  if (groupDetail && !isGroupAdmin && !isGlobalAdmin) {
+    return (
+      <View style={styles.centered}>
+        <Text variant="titleMedium">No tienes permiso para ver esta pantalla.</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
+      {/* Código de invitación — solo visible para el admin de la peña */}
+      <Surface style={styles.codeBox} elevation={1}>
+        <View style={styles.codeRow}>
+          <View>
+            <Text variant="labelSmall" style={styles.codeLabel}>Código de invitación</Text>
+            <Text variant="titleMedium" style={styles.codeValue}>
+              {groupDetail?.inviteCode ?? '···'}
+            </Text>
+          </View>
+          <Button
+            mode="outlined" compact
+            icon={copied ? 'check' : 'content-copy'}
+            onPress={copyCode}
+          >
+            {copied ? 'Copiado' : 'Copiar'}
+          </Button>
+        </View>
+      </Surface>
+
       <View style={styles.tabRow}>
         {tabs.map((t) => (
           <Chip key={t.key} selected={tab === t.key} onPress={() => setTab(t.key)} style={{ flex: 1 }}>
@@ -905,6 +945,11 @@ export default function AdminPanelScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   container: { padding: 16, gap: 12, paddingBottom: 40 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  codeBox: { borderRadius: 10, padding: 14 },
+  codeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  codeLabel: { opacity: 0.6, marginBottom: 2 },
+  codeValue: { letterSpacing: 2, fontWeight: '700' },
   tabRow: { flexDirection: 'row', gap: 8 },
   sectionTitle: { fontWeight: '600', marginTop: 4 },
   divider: { marginVertical: 8 },
