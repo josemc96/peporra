@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import {
-  ActivityIndicator, Avatar, Button, Chip, Divider, IconButton,
-  List, Surface, Text, TextInput, useTheme,
+  ActivityIndicator, Avatar, Button, Chip, IconButton,
+  Surface, Text,
 } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,8 +12,6 @@ import { penaltiesApi, RankingEntry as MatchdayRankingEntry } from '@/api/penalt
 import { adminGroupApi } from '@/api/adminGroup';
 import { predictionsApi } from '@/api/predictions';
 import { groupsApi } from '@/api/groups';
-import { apiFetch } from '@/api/client';
-import { awardPredictionsApi, Award } from '@/api/awardPredictions';
 import { useAuth } from '@/context/AuthContext';
 import { useCurrentGroup } from '@/context/CurrentGroupContext';
 import { colors } from '@/config/theme';
@@ -87,171 +85,12 @@ function MatchdayRow({ entry, position, isMe, total, onPress, onKick }: {
   );
 }
 
-// ─── Premios section ──────────────────────────────────────────────────────────
-
-function PremiosSection({
-  groupId, season, isSeasonLocked,
-  hasPichichi, hasZamora,
-}: {
-  groupId: string; season: string; isSeasonLocked: boolean;
-  hasPichichi: boolean; hasZamora: boolean;
-}) {
-  const theme = useTheme();
-  const qc = useQueryClient();
-  const awards: Award[] = [
-    ...(hasPichichi ? ['pichichi' as Award] : []),
-    ...(hasZamora ? ['zamora' as Award] : []),
-  ];
-  const [activeAward, setActiveAward] = useState<Award>(awards[0] ?? 'pichichi');
-  const [playerInput, setPlayerInput] = useState('');
-  const [saved, setSaved] = useState(false);
-
-  // Mi predicción actual (siempre, para pre-rellenar el input)
-  const { data: myPrediction, isLoading: predLoading } = useQuery({
-    queryKey: ['my-award-prediction', season, activeAward],
-    queryFn: () => awardPredictionsApi.get(season, activeAward),
-    enabled: !!season,
-  });
-
-  // Goleadores (solo Pichichi, antes del kickoff como referencia)
-  const { data: scorers } = useQuery({
-    queryKey: ['scorers', season],
-    queryFn: () => awardPredictionsApi.listScorers(season),
-    enabled: !isSeasonLocked && activeAward === 'pichichi',
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Apuestas del grupo (solo después del kickoff)
-  const { data: groupPredictions, isLoading: groupLoading } = useQuery({
-    queryKey: ['group-award-predictions', groupId, season, activeAward],
-    queryFn: () => awardPredictionsApi.getGroupPredictions(groupId, season, activeAward),
-    enabled: isSeasonLocked && !!groupId,
-  });
-
-  // Sincronizar input con la predicción cargada
-  useEffect(() => {
-    setPlayerInput(myPrediction?.predictedPlayer ?? '');
-    setSaved(false);
-  }, [myPrediction, activeAward]);
-
-  const { mutate: save, isPending: saving, error: saveError } = useMutation({
-    mutationFn: () => awardPredictionsApi.upsert(season, activeAward, playerInput.trim()),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['my-award-prediction', season, activeAward] });
-      setSaved(true);
-    },
-  });
-
-  return (
-    <View style={styles.premiosContainer}>
-      {/* Sub-tabs Pichichi / Zamora */}
-      {awards.length > 1 && (
-        <View style={styles.subTabs}>
-          {awards.map((a) => (
-            <Chip key={a} selected={activeAward === a} onPress={() => setActiveAward(a)} style={styles.chip}>
-              {a === 'pichichi' ? '⚽ Pichichi' : '🧤 Zamora'}
-            </Chip>
-          ))}
-        </View>
-      )}
-
-      {!isSeasonLocked ? (
-        /* ── Antes del kickoff: formulario de edición inline ── */
-        predLoading ? (
-          <ActivityIndicator style={{ marginTop: 16 }} />
-        ) : (
-          <View style={styles.premiosForm}>
-            <TextInput
-              label={activeAward === 'pichichi' ? 'Nombre del jugador' : 'Nombre del portero'}
-              value={playerInput}
-              onChangeText={(t) => { setPlayerInput(t); setSaved(false); }}
-              mode="outlined"
-              autoCorrect={false}
-            />
-            {!!saveError && (
-              <Text variant="labelSmall" style={{ color: theme.colors.error }}>
-                {(saveError as Error).message}
-              </Text>
-            )}
-            {saved && (
-              <Text variant="labelMedium" style={{ color: theme.colors.primary }}>
-                Predicción guardada
-              </Text>
-            )}
-            <Button
-              mode="contained"
-              onPress={() => save()}
-              loading={saving}
-              disabled={saving || playerInput.trim().length === 0}
-            >
-              Guardar predicción
-            </Button>
-
-            {/* Lista de goleadores como referencia (solo Pichichi) */}
-            {activeAward === 'pichichi' && !!scorers?.length && (
-              <>
-                <Divider style={{ marginVertical: 8 }} />
-                <Text variant="labelMedium" style={{ opacity: 0.6 }}>Goleadores actuales</Text>
-                {scorers.map((s, i) => (
-                  <List.Item
-                    key={s._id}
-                    title={s.playerName}
-                    description={`${s.team} · ${s.goals} goles`}
-                    left={() => (
-                      <Text variant="bodyMedium" style={styles.scorerPos}>{i + 1}</Text>
-                    )}
-                    right={() => (
-                      <Button compact mode="text" onPress={() => { setPlayerInput(s.playerName); setSaved(false); }}>
-                        Elegir
-                      </Button>
-                    )}
-                  />
-                ))}
-              </>
-            )}
-
-            {activeAward === 'zamora' && (
-              <Text variant="bodySmall" style={styles.zamoraNote}>
-                La clasificación del Zamora no está disponible en la API gratuita. Introduce el nombre del portero que crees que recibirá menos goles.
-              </Text>
-            )}
-          </View>
-        )
-      ) : (
-        /* ── Después del kickoff: lista de apuestas de todos ── */
-        groupLoading ? (
-          <ActivityIndicator style={{ marginTop: 16 }} />
-        ) : !groupPredictions?.length ? (
-          <Text style={styles.emptyText}>
-            Ningún miembro ha apostado por {activeAward === 'pichichi' ? 'el Pichichi' : 'el Zamora'}.
-          </Text>
-        ) : (
-          <View style={styles.predList}>
-            {groupPredictions.map((p) => (
-              <Surface key={p._id} style={styles.predRow} elevation={1}>
-                <Avatar.Text size={32} label={(p.user.alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
-                <View style={styles.userInfo}>
-                  <Text variant="bodyMedium" style={styles.alias}>{p.user.alias ?? '?'}</Text>
-                </View>
-                <Text variant="titleSmall" style={styles.predPlayer}>{p.predictedPlayer}</Text>
-              </Surface>
-            ))}
-          </View>
-        )
-      )}
-    </View>
-  );
-}
-
 // ─── Main tab ────────────────────────────────────────────────────────────────
-
-type MainTab = 'ranking' | 'premios';
 
 export default function GroupTab() {
   const { group, leaveGroup } = useCurrentGroup();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [mainTab, setMainTab] = useState<MainTab>('ranking');
   const [rankingView, setRankingView] = useState<'matchday' | 'season'>('matchday');
   const [matchday, setMatchday] = useState(1);
   const hasSetCurrentMatchday = useRef(false);
@@ -303,19 +142,10 @@ export default function GroupTab() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Usar el endpoint del backend como única fuente de verdad para el bloqueo de temporada
-  const { data: seasonStatus } = useQuery({
-    queryKey: ['season-locked', season],
-    queryFn: () => apiFetch<{ locked: boolean }>(`/season/is-locked?season=${encodeURIComponent(season)}`),
-    enabled: !!season,
-    staleTime: 5 * 60 * 1000,
-  });
-  const isSeasonLocked = seasonStatus?.locked ?? false;
-
   const { data: seasonRanking, isLoading: loadingSeason } = useQuery({
     queryKey: ['ranking', groupId, season],
     queryFn: () => rankingApi.get(groupId, season),
-    enabled: !!groupId && mainTab === 'ranking',
+    enabled: !!groupId,
   });
 
   // Se pide siempre (no solo en la vista de ranking) porque el bote total de la peña se
@@ -335,7 +165,7 @@ export default function GroupTab() {
   const { data: matchdayData, isLoading: loadingMatchday } = useQuery({
     queryKey: ['ranking-matchday', groupId, season, matchday],
     queryFn: () => penaltiesApi.getMatchdayRanking(groupId, season, matchday),
-    enabled: !!groupId && rankingView === 'matchday' && mainTab === 'ranking',
+    enabled: !!groupId && rankingView === 'matchday',
   });
 
   const debtMap = useMemo(() => {
@@ -367,8 +197,8 @@ export default function GroupTab() {
     rankingView === 'season' ? (seasonRanking ?? []) : (matchdayData?.ranking ?? []);
 
   const flatListData = useMemo(
-    () => (mainTab === 'ranking' && !rankingIsLoading ? rankingData : []),
-    [mainTab, rankingIsLoading, rankingData],
+    () => (!rankingIsLoading ? rankingData : []),
+    [rankingIsLoading, rankingData],
   );
 
   const renderHeader = useCallback(() => (
@@ -389,75 +219,37 @@ export default function GroupTab() {
         >
           Tabla de La Liga
         </Button>
-        {hasStandings && (
-          <Button
-            mode="outlined" compact icon="table" style={styles.quickBtn}
-            onPress={() => router.push({ pathname: '/standings-prediction/[season]' as never, params: { season } })}
-          >
-            Clasificación
-          </Button>
-        )}
       </View>
-
-      {/* Tabs principales */}
-      <View style={styles.mainTabs}>
-        <Chip selected={mainTab === 'ranking'} onPress={() => setMainTab('ranking')} style={styles.chip}>
-          Clasificación
-        </Chip>
-        {hasPremios && (
-          <Chip selected={mainTab === 'premios'} onPress={() => setMainTab('premios')} style={styles.chip}>
-            Premios
-          </Chip>
-        )}
-      </View>
-
-      {/* Contenido de Premios (no usa FlatList, es estático) */}
-      {mainTab === 'premios' && hasPremios && (
-        <PremiosSection
-          groupId={groupId}
-          season={season}
-          isSeasonLocked={isSeasonLocked}
-          hasPichichi={hasPichichi}
-          hasZamora={hasZamora}
-        />
-      )}
 
       {/* Sub-tabs ranking */}
-      {mainTab === 'ranking' && (
-        <>
-          <View style={styles.subTabs}>
-            <Chip selected={rankingView === 'matchday'} onPress={() => setRankingView('matchday')} style={styles.chip}>
-              Por jornada
-            </Chip>
-            <Chip selected={rankingView === 'season'} onPress={() => setRankingView('season')} style={styles.chip}>
-              Global
-            </Chip>
-          </View>
+      <View style={styles.subTabs}>
+        <Chip selected={rankingView === 'matchday'} onPress={() => setRankingView('matchday')} style={styles.chip}>
+          Por jornada
+        </Chip>
+        <Chip selected={rankingView === 'season'} onPress={() => setRankingView('season')} style={styles.chip}>
+          Global
+        </Chip>
+      </View>
 
-          {rankingView === 'matchday' && (
-            <View style={styles.matchdayNav}>
-              <IconButton
-                icon="chevron-left" size={28}
-                onPress={() => setMatchday((d) => Math.max(1, d - 1))}
-                disabled={matchday <= 1}
-              />
-              <Text variant="titleMedium" style={{ fontWeight: '600' }}>Jornada {matchday}</Text>
-              <IconButton
-                icon="chevron-right" size={28}
-                onPress={() => setMatchday((d) => Math.min(38, d + 1))}
-                disabled={matchday >= 38}
-              />
-            </View>
-          )}
-
-          {rankingIsLoading && <ActivityIndicator style={{ marginVertical: 24 }} />}
-        </>
+      {rankingView === 'matchday' && (
+        <View style={styles.matchdayNav}>
+          <IconButton
+            icon="chevron-left" size={28}
+            onPress={() => setMatchday((d) => Math.max(1, d - 1))}
+            disabled={matchday <= 1}
+          />
+          <Text variant="titleMedium" style={{ fontWeight: '600' }}>Jornada {matchday}</Text>
+          <IconButton
+            icon="chevron-right" size={28}
+            onPress={() => setMatchday((d) => Math.min(38, d + 1))}
+            disabled={matchday >= 38}
+          />
+        </View>
       )}
+
+      {rankingIsLoading && <ActivityIndicator style={{ marginVertical: 24 }} />}
     </View>
-  ), [
-    totalDebt, hasStandings, season, mainTab, hasPremios,
-    groupId, isSeasonLocked, hasPichichi, hasZamora, rankingView, matchday, rankingIsLoading,
-  ]);
+  ), [totalDebt, season, rankingView, matchday, rankingIsLoading]);
 
   const renderItem = useCallback(({ item, index }: { item: RankingEntry | MatchdayRankingEntry; index: number }) => {
     const total = rankingData.length;
@@ -509,7 +301,7 @@ export default function GroupTab() {
         ListHeaderComponent={renderHeader}
         renderItem={renderItem}
         ListEmptyComponent={
-          mainTab === 'ranking' && !rankingIsLoading ? (
+          !rankingIsLoading ? (
             <Text style={styles.emptyText}>Sin datos para esta jornada todavía.</Text>
           ) : null
         }
@@ -518,6 +310,14 @@ export default function GroupTab() {
 
       <Surface style={styles.footer} elevation={3}>
         <View style={styles.footerActions}>
+          {(hasStandings || hasPremios) && (
+            <Button
+              compact mode="text" icon="trophy-outline"
+              onPress={() => router.push({ pathname: '/bets/[groupId]' as never, params: { groupId, season } })}
+            >
+              Apuestas
+            </Button>
+          )}
           {isGroupAdmin && (
             <Button
               compact mode="text" icon="cog"
@@ -552,7 +352,6 @@ const styles = StyleSheet.create({
   quickBtn: { flex: 1, minWidth: 100 },
 
   // Tabs
-  mainTabs: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   subTabs: { flexDirection: 'row', gap: 8, marginBottom: 6 },
   chip: { flex: 1 },
 
@@ -574,18 +373,6 @@ const styles = StyleSheet.create({
   points: { fontWeight: '700' },
   debt: { color: '#E88C00', fontWeight: '600' },
   emptyText: { textAlign: 'center', opacity: 0.5, marginTop: 32 },
-
-  // Premios
-  premiosContainer: { gap: 12 },
-  premiosForm: { gap: 10 },
-  scorerPos: { width: 28, textAlign: 'center', alignSelf: 'center', opacity: 0.6 },
-  zamoraNote: { opacity: 0.5, fontStyle: 'italic' },
-  predList: { gap: 8 },
-  predRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 10, padding: 10, gap: 10,
-  },
-  predPlayer: { fontWeight: '700', color: '#C04A1A' },
 
   // Footer
   footer: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 8, paddingVertical: 4 },
