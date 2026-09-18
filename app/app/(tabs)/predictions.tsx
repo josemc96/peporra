@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, ScrollView, SectionList, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator, Button, Card, Chip, IconButton,
-  Modal, Portal, SegmentedButtons, Text,
+  SegmentedButtons, Text,
 } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import { predictionsApi, Match, Prediction } from '@/api/predictions';
 import { adminGroupApi, ScoreMultiplier } from '@/api/adminGroup';
 import { cardsApi, CARD_LABELS, CARD_EMOJI } from '@/api/cards';
 import { useCurrentGroup } from '@/context/CurrentGroupContext';
+import { JornadaPicker } from '@/components/JornadaPicker';
 import { colors } from '@/config/theme';
 
 type Competition = 'la_liga' | 'copa_del_rey' | 'supercopa';
@@ -218,7 +219,6 @@ export default function PredictionsTab() {
   const [filterMatchday, setFilterMatchday] = useState<number | null>(
     params.matchday ? parseInt(params.matchday, 10) : null
   );
-  const [jornadaModalVisible, setJornadaModalVisible] = useState(false);
   const sectionListRef = useRef<SectionList<Match, MatchdaySection>>(null);
   const hasAutoScrolled = useRef(false);
   const lastScrollTarget = useRef<{ sectionIndex: number; itemIndex: number } | null>(null);
@@ -414,7 +414,6 @@ export default function PredictionsTab() {
   }, [isLoading, filterMatchday, initialScrollTarget]);
 
   function selectJornada(day: number) {
-    setJornadaModalVisible(false);
     setFilterMatchday(day);
   }
 
@@ -457,11 +456,10 @@ export default function PredictionsTab() {
       {competitionTab === 'la_liga' && (
         <View style={styles.jornadaBar}>
           <View style={styles.jornadaBarSide}>
-            <IconButton
-              icon="calendar-month" mode="contained-tonal" size={18}
-              iconColor={colors.primary}
-              containerColor={colors.primaryDim}
-              onPress={() => setJornadaModalVisible(true)}
+            <JornadaPicker
+              matchdays={matchdays}
+              selected={filterMatchday ?? activeMatchday}
+              onSelect={selectJornada}
             />
           </View>
 
@@ -565,32 +563,6 @@ export default function PredictionsTab() {
         />
       )}
 
-      <Portal>
-        <Modal
-          visible={jornadaModalVisible}
-          onDismiss={() => setJornadaModalVisible(false)}
-          contentContainerStyle={styles.jornadaModal}
-        >
-          <Text variant="titleMedium" style={styles.jornadaModalTitle}>Ir a jornada</Text>
-          <ScrollView contentContainerStyle={styles.jornadaGrid}>
-            {matchdays.map((day) => {
-              const active = day === (filterMatchday ?? activeMatchday);
-              return (
-                <Chip
-                  key={day}
-                  mode={active ? 'flat' : 'outlined'}
-                  selected={active}
-                  style={[styles.jornadaChip, active && styles.jornadaChipActive]}
-                  textStyle={active ? styles.jornadaChipActiveText : undefined}
-                  onPress={() => selectJornada(day)}
-                >
-                  {day}
-                </Chip>
-              );
-            })}
-          </ScrollView>
-        </Modal>
-      </Portal>
     </View>
   );
 }
@@ -612,15 +584,6 @@ const styles = StyleSheet.create({
   jornadaBarSide: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   jornadaBarSideRight: { justifyContent: 'flex-end' },
   jornadaBarCenter: { flexShrink: 1, alignItems: 'center' },
-  jornadaModal: {
-    backgroundColor: colors.surface, borderRadius: 14, marginHorizontal: 20,
-    padding: 16, maxHeight: '75%',
-  },
-  jornadaModalTitle: { fontWeight: '700', marginBottom: 12 },
-  jornadaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 4 },
-  jornadaChip: { minWidth: 52, alignItems: 'center' },
-  jornadaChipActive: { backgroundColor: colors.primary },
-  jornadaChipActiveText: { color: '#fff', fontWeight: '700' },
   sectionHeader: {
     backgroundColor: colors.bg, paddingHorizontal: 4, paddingTop: 14, paddingBottom: 6,
   },

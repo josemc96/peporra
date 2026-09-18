@@ -14,68 +14,70 @@ import { predictionsApi } from '@/api/predictions';
 import { groupsApi } from '@/api/groups';
 import { useAuth } from '@/context/AuthContext';
 import { useCurrentGroup } from '@/context/CurrentGroupContext';
+import { JornadaPicker } from '@/components/JornadaPicker';
+import { TeamStandingsTable } from '@/components/TeamStandingsTable';
 import { colors } from '@/config/theme';
 
 const MEDAL_COLORS = ['#FFBE0B', '#C0C0C0', '#CD7F32'];
 
-// ─── Ranking rows ────────────────────────────────────────────────────────────
+// ─── Fila de jugador ──────────────────────────────────────────────────────────
+// Siempre trae los 4 datos (puntos jornada/total, deuda jornada/total): el par que toca
+// según la vista activa se muestra grande, el otro par queda pequeño/apagado debajo.
 
-function SeasonRow({ entry, position, isMe, debt, total, onPress, onKick }: {
-  entry: RankingEntry; position: number; isMe: boolean; debt: number; total: number;
+function PlayerRow({
+  alias, isMe, position, exactScores,
+  rankingView, matchday,
+  seasonPoints, matchdayPoints, seasonDebt, matchdayDebt,
+  onPress, onKick,
+}: {
+  alias: string; isMe: boolean; position: number; exactScores: number;
+  rankingView: 'matchday' | 'season'; matchday: number;
+  seasonPoints: number; matchdayPoints: number; seasonDebt: number; matchdayDebt: number;
   onPress: () => void; onKick?: () => void;
 }) {
   const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
+  const isMatchday = rankingView === 'matchday';
+
+  const primaryPoints = isMatchday ? matchdayPoints : seasonPoints;
+  const secondaryPointsLabel = isMatchday
+    ? `${seasonPoints} pts temporada`
+    : `${matchdayPoints} pts en J${matchday}`;
+
+  const primaryDebt = isMatchday ? matchdayDebt : seasonDebt;
+  const secondaryDebt = isMatchday ? seasonDebt : matchdayDebt;
+  const secondaryDebtLabel = isMatchday ? `${seasonDebt}€ en total` : `${matchdayDebt}€ en J${matchday}`;
+  const showDebt = matchdayDebt > 0 || seasonDebt > 0;
+
   return (
     <Pressable onPress={onPress} android_ripple={{ color: '#0001' }}>
       <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
         <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
           <Text variant="titleMedium" style={styles.posText}>{position}</Text>
         </View>
-        <Avatar.Text size={36} label={(entry.user.alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
+        <Avatar.Text size={36} label={(alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
         <View style={styles.userInfo}>
           <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]}>
-            {entry.user.alias ?? '?'}{isMe ? '  (tú)' : ''}
+            {alias ?? '?'}{isMe ? '  (tú)' : ''}
           </Text>
-          {entry.exactScores > 0 && (
+          {exactScores > 0 && (
             <Text variant="labelSmall" style={styles.exactLabel}>
-              {entry.exactScores} exacto{entry.exactScores !== 1 ? 's' : ''}
+              {exactScores} exacto{exactScores !== 1 ? 's' : ''} en la temporada
             </Text>
           )}
         </View>
         <View style={styles.rightCol}>
-          <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
-            {entry.points} pts
+          <Text variant="titleMedium" style={[styles.pointsPrimary, medalColor ? { color: medalColor } : undefined]}>
+            {primaryPoints} pts
           </Text>
-          {debt > 0 && <Text variant="labelSmall" style={styles.debt}>💸 {debt}€</Text>}
-        </View>
-        {onKick && (
-          <IconButton icon="account-remove" size={20} onPress={(e) => { e.stopPropagation?.(); onKick(); }} />
-        )}
-      </Surface>
-    </Pressable>
-  );
-}
-
-function MatchdayRow({ entry, position, isMe, total, onPress, onKick }: {
-  entry: MatchdayRankingEntry; position: number; isMe: boolean; total: number;
-  onPress: () => void; onKick?: () => void;
-}) {
-  const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
-  return (
-    <Pressable onPress={onPress} android_ripple={{ color: '#0001' }}>
-      <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
-        <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
-          <Text variant="titleMedium" style={styles.posText}>{position}</Text>
-        </View>
-        <Avatar.Text size={36} label={(entry.user.alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
-        <Text variant="bodyLarge" style={[styles.alias, styles.userInfo, isMe && styles.aliasMe]}>
-          {entry.user.alias ?? '?'}{isMe ? '  (tú)' : ''}
-        </Text>
-        <View style={styles.rightCol}>
-          <Text variant="titleMedium" style={[styles.points, medalColor ? { color: medalColor } : undefined]}>
-            {entry.points} pts
-          </Text>
-          {entry.debt > 0 && <Text variant="labelSmall" style={styles.debt}>💸 {entry.debt}€</Text>}
+          <Text variant="labelSmall" style={styles.pointsSecondary}>{secondaryPointsLabel}</Text>
+          {showDebt && (
+            <>
+              <Text variant="labelMedium" style={styles.debtPrimary}>💸 {primaryDebt}€</Text>
+              {secondaryDebt > 0 && (
+                <Text variant="labelSmall" style={styles.debtSecondary}>{secondaryDebtLabel}</Text>
+              )}
+            </>
+          )}
         </View>
         {onKick && (
           <IconButton icon="account-remove" size={20} onPress={(e) => { e.stopPropagation?.(); onKick(); }} />
@@ -87,10 +89,13 @@ function MatchdayRow({ entry, position, isMe, total, onPress, onKick }: {
 
 // ─── Main tab ────────────────────────────────────────────────────────────────
 
+type MainView = 'usuarios' | 'equipos';
+
 export default function GroupTab() {
   const { group, leaveGroup } = useCurrentGroup();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [mainView, setMainView] = useState<MainView>('usuarios');
   const [rankingView, setRankingView] = useState<'matchday' | 'season'>('matchday');
   const [matchday, setMatchday] = useState(1);
   const [betsMenuVisible, setBetsMenuVisible] = useState(false);
@@ -106,8 +111,17 @@ export default function GroupTab() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Jornada "actual": la del partido en curso ahora mismo, o si no la del próximo por
-  // empezar, o si no la última jugada (temporada terminada) — para no arrancar en la 1.
+  const matchdays = useMemo(() => {
+    if (!matches) return [];
+    return [
+      ...new Set(
+        matches.filter((m) => m.competition === 'la_liga' && m.matchday != null).map((m) => m.matchday!)
+      ),
+    ].sort((a, b) => a - b);
+  }, [matches]);
+
+  // Jornada "actual": la del partido en curso ahora mismo, o si no la última ya jugada, o
+  // si no la ha habido ninguna todavía la próxima por empezar (inicio de temporada).
   const currentMatchday = useMemo(() => {
     if (!matches) return null;
     const laLiga = matches.filter((m) => m.competition === 'la_liga' && m.matchday != null);
@@ -115,12 +129,13 @@ export default function GroupTab() {
     const now = new Date();
     const live = laLiga.find((m) => m.status !== 'finished' && m.status !== 'postponed' && new Date(m.startTime) <= now);
     if (live) return live.matchday!;
-    const upcoming = [...laLiga]
-      .filter((m) => new Date(m.startTime) > now)
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+    const sorted = [...laLiga].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (sorted[i].status === 'finished') return sorted[i].matchday!;
+    }
+    const upcoming = sorted.find((m) => new Date(m.startTime) > now);
     if (upcoming) return upcoming.matchday!;
-    const last = [...laLiga].sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())[0];
-    return last.matchday ?? null;
+    return sorted[sorted.length - 1].matchday ?? null;
   }, [matches]);
 
   useEffect(() => {
@@ -163,10 +178,12 @@ export default function GroupTab() {
     [debt]
   );
 
+  // Se pide siempre (no solo en la vista "Por jornada") porque cada fila muestra los 4
+  // datos a la vez — el de jornada hace falta también estando en la vista "Global".
   const { data: matchdayData, isLoading: loadingMatchday } = useQuery({
     queryKey: ['ranking-matchday', groupId, season, matchday],
     queryFn: () => penaltiesApi.getMatchdayRanking(groupId, season, matchday),
-    enabled: !!groupId && rankingView === 'matchday',
+    enabled: !!groupId,
   });
 
   const debtMap = useMemo(() => {
@@ -174,6 +191,18 @@ export default function GroupTab() {
     debt?.forEach((d) => map.set(d.user.id, d.total));
     return map;
   }, [debt]);
+
+  const seasonMap = useMemo(() => {
+    const map = new Map<string, RankingEntry>();
+    seasonRanking?.forEach((e) => map.set(e.user.id, e));
+    return map;
+  }, [seasonRanking]);
+
+  const matchdayMap = useMemo(() => {
+    const map = new Map<string, MatchdayRankingEntry>();
+    matchdayData?.ranking.forEach((e) => map.set(e.user.id, e));
+    return map;
+  }, [matchdayData]);
 
   const handleLeave = useCallback(async () => {
     await leaveGroup();
@@ -204,24 +233,6 @@ export default function GroupTab() {
 
   const renderHeader = useCallback(() => (
     <View>
-      {/* Bote acumulado de la peña (suma de la deuda de todos los usuarios) */}
-      {totalDebt > 0 && (
-        <Surface style={styles.totalDebtBox} elevation={1}>
-          <Text variant="labelSmall" style={styles.totalDebtLabel}>💰 Bote acumulado de la peña</Text>
-          <Text variant="titleLarge" style={styles.totalDebtValue}>{totalDebt}€</Text>
-        </Surface>
-      )}
-
-      {/* Accesos rápidos */}
-      <View style={styles.quickLinks}>
-        <Button
-          mode="outlined" compact icon="format-list-numbered" style={styles.quickBtn}
-          onPress={() => router.push({ pathname: '/standings-table/[season]' as never, params: { season } })}
-        >
-          Tabla de La Liga
-        </Button>
-      </View>
-
       {/* Sub-tabs ranking */}
       <View style={styles.subTabs}>
         <Chip selected={rankingView === 'matchday'} onPress={() => setRankingView('matchday')} style={styles.chip}>
@@ -232,82 +243,92 @@ export default function GroupTab() {
         </Chip>
       </View>
 
-      {rankingView === 'matchday' && (
+      {rankingView === 'matchday' ? (
         <View style={styles.matchdayNav}>
-          <IconButton
-            icon="chevron-left" size={28}
-            onPress={() => setMatchday((d) => Math.max(1, d - 1))}
-            disabled={matchday <= 1}
-          />
-          <Text variant="titleMedium" style={{ fontWeight: '600' }}>Jornada {matchday}</Text>
-          <IconButton
-            icon="chevron-right" size={28}
-            onPress={() => setMatchday((d) => Math.min(38, d + 1))}
-            disabled={matchday >= 38}
-          />
+          <JornadaPicker matchdays={matchdays} selected={matchday} onSelect={setMatchday} />
+          <Text variant="titleMedium" style={styles.matchdayLabel}>Jornada {matchday}</Text>
         </View>
+      ) : (
+        // Bote acumulado de la peña — solo en la vista Global, no tiene sentido por jornada.
+        totalDebt > 0 && (
+          <Surface style={styles.totalDebtBox} elevation={1}>
+            <Text variant="labelSmall" style={styles.totalDebtLabel}>💰 Bote acumulado de la peña</Text>
+            <Text variant="titleLarge" style={styles.totalDebtValue}>{totalDebt}€</Text>
+          </Surface>
+        )
       )}
 
       {rankingIsLoading && <ActivityIndicator style={{ marginVertical: 24 }} />}
     </View>
-  ), [totalDebt, season, rankingView, matchday, rankingIsLoading]);
+  ), [rankingView, matchday, matchdays, rankingIsLoading, totalDebt]);
 
   const renderItem = useCallback(({ item, index }: { item: RankingEntry | MatchdayRankingEntry; index: number }) => {
-    const total = rankingData.length;
-    const globalEntry = seasonRanking?.find((e) => e.user.id === item.user.id);
+    const seasonEntry = seasonMap.get(item.user.id);
+    const matchdayEntry = matchdayMap.get(item.user.id);
     const globalPos = seasonRanking ? (seasonRanking.findIndex((e) => e.user.id === item.user.id) + 1) : 0;
     const goToProfile = () => router.push({
       pathname: '/user/[userId]' as never,
       params: {
         userId: item.user.id,
         alias: item.user.alias,
-        points: String(globalEntry?.points ?? 0),
-        exactScores: String(globalEntry?.exactScores ?? 0),
+        points: String(seasonEntry?.points ?? 0),
+        exactScores: String(seasonEntry?.exactScores ?? 0),
         position: String(globalPos),
-        total: String(seasonRanking?.length ?? total),
+        total: String(seasonRanking?.length ?? rankingData.length),
         groupId,
         season,
       },
     });
     const canKick = isGroupAdmin && item.user.id !== user?.id;
-    return rankingView === 'season' ? (
-      <SeasonRow
-        entry={item as RankingEntry}
-        position={index + 1}
+
+    return (
+      <PlayerRow
+        alias={item.user.alias}
         isMe={item.user.id === user?.id}
-        debt={debtMap.get(item.user.id) ?? 0}
-        total={total}
-        onPress={goToProfile}
-        onKick={canKick ? () => kick(item.user.id) : undefined}
-      />
-    ) : (
-      <MatchdayRow
-        entry={item as MatchdayRankingEntry}
         position={index + 1}
-        isMe={item.user.id === user?.id}
-        total={total}
+        exactScores={seasonEntry?.exactScores ?? 0}
+        rankingView={rankingView}
+        matchday={matchday}
+        seasonPoints={seasonEntry?.points ?? 0}
+        matchdayPoints={matchdayEntry?.points ?? 0}
+        seasonDebt={debtMap.get(item.user.id) ?? 0}
+        matchdayDebt={matchdayEntry?.debt ?? 0}
         onPress={goToProfile}
         onKick={canKick ? () => kick(item.user.id) : undefined}
       />
     );
-  }, [rankingData, seasonRanking, groupId, season, isGroupAdmin, user?.id, debtMap, rankingView, kick]);
+  }, [rankingData, seasonRanking, seasonMap, matchdayMap, groupId, season, isGroupAdmin, user?.id, debtMap, rankingView, matchday, kick]);
 
   if (!group) return null;
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={flatListData}
-        keyExtractor={(e) => e.user.id}
-        ListHeaderComponent={renderHeader}
-        renderItem={renderItem}
-        ListEmptyComponent={
-          !rankingIsLoading ? (
-            <Text style={styles.emptyText}>Sin datos para esta jornada todavía.</Text>
-          ) : null
-        }
-        contentContainerStyle={styles.list}
-      />
+      {/* Usuarios / Tabla Liga */}
+      <View style={styles.mainViewTabs}>
+        <Chip selected={mainView === 'usuarios'} onPress={() => setMainView('usuarios')} style={styles.chip} icon="account-group">
+          Usuarios
+        </Chip>
+        <Chip selected={mainView === 'equipos'} onPress={() => setMainView('equipos')} style={styles.chip} icon="soccer">
+          Tabla Liga
+        </Chip>
+      </View>
+
+      {mainView === 'equipos' ? (
+        <TeamStandingsTable season={season} />
+      ) : (
+        <FlatList
+          data={flatListData}
+          keyExtractor={(e) => e.user.id}
+          ListHeaderComponent={renderHeader}
+          renderItem={renderItem}
+          ListEmptyComponent={
+            !rankingIsLoading ? (
+              <Text style={styles.emptyText}>Sin datos para esta jornada todavía.</Text>
+            ) : null
+          }
+          contentContainerStyle={styles.list}
+        />
+      )}
 
       <Surface style={styles.footer} elevation={3}>
         <View style={styles.footerActions}>
@@ -379,22 +400,20 @@ const styles = StyleSheet.create({
 
   // Bote total
   totalDebtBox: {
-    borderRadius: 10, padding: 14, marginBottom: 10, alignItems: 'center', gap: 2,
+    borderRadius: 10, padding: 14, marginBottom: 4, alignItems: 'center', gap: 2,
     backgroundColor: colors.errorDim,
   },
   totalDebtLabel: { color: colors.debt, opacity: 0.9 },
   totalDebtValue: { color: colors.debt, fontWeight: '700' },
 
-  // Quick links
-  quickLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  quickBtn: { flex: 1, minWidth: 100 },
-
   // Tabs
+  mainViewTabs: { flexDirection: 'row', gap: 8, padding: 12, paddingBottom: 0 },
   subTabs: { flexDirection: 'row', gap: 8, marginBottom: 6 },
   chip: { flex: 1 },
 
   // Jornada nav
-  matchdayNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  matchdayNav: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  matchdayLabel: { fontWeight: '600' },
 
   // Ranking rows
   row: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 10, gap: 10 },
@@ -407,9 +426,11 @@ const styles = StyleSheet.create({
   alias: { fontWeight: '500' },
   aliasMe: { color: '#C04A1A', fontWeight: '700' },
   exactLabel: { opacity: 0.5, marginTop: 1 },
-  rightCol: { alignItems: 'flex-end', gap: 2 },
-  points: { fontWeight: '700' },
-  debt: { color: '#E88C00', fontWeight: '600' },
+  rightCol: { alignItems: 'flex-end', gap: 0 },
+  pointsPrimary: { fontWeight: '700' },
+  pointsSecondary: { opacity: 0.45, marginBottom: 2 },
+  debtPrimary: { color: colors.debt, fontWeight: '700' },
+  debtSecondary: { opacity: 0.45, color: colors.debt },
   emptyText: { textAlign: 'center', opacity: 0.5, marginTop: 32 },
 
   // Footer
