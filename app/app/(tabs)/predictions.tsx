@@ -337,15 +337,20 @@ export default function PredictionsTab() {
     return result;
   }, [sortedLaLigaMatches]);
 
-  // Punto de partida al abrir la pestaña: el partido más cercano a empezar (o el último
-  // jugado si la temporada ya terminó), como sectionIndex/itemIndex para SectionList.
+  // Punto de partida al abrir la pestaña, como sectionIndex/itemIndex para SectionList.
   const initialScrollTarget = useMemo(() => {
     if (sortedLaLigaMatches.length === 0) return null;
     const now = new Date();
-    // Prioridad: un partido en curso ahora mismo > el próximo por empezar > el último jugado.
+    // Prioridad: un partido en curso ahora mismo > el último jugado > el próximo por
+    // empezar (solo si aún no se ha jugado ninguno, ej. inicio de temporada).
     let targetId = sortedLaLigaMatches.find(
       (m) => m.status !== 'finished' && m.status !== 'postponed' && new Date(m.startTime) <= now
     )?._id;
+    if (!targetId) {
+      for (let i = sortedLaLigaMatches.length - 1; i >= 0; i--) {
+        if (sortedLaLigaMatches[i].status === 'finished') { targetId = sortedLaLigaMatches[i]._id; break; }
+      }
+    }
     if (!targetId) targetId = sortedLaLigaMatches.find((m) => new Date(m.startTime) > now)?._id;
     if (!targetId) targetId = sortedLaLigaMatches[sortedLaLigaMatches.length - 1]._id;
     for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
