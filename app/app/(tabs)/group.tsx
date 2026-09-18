@@ -318,12 +318,19 @@ export default function GroupTab() {
     enabled: !!groupId && mainTab === 'ranking',
   });
 
+  // Se pide siempre (no solo en la vista de ranking) porque el bote total de la peña se
+  // muestra en la cabecera con independencia de la pestaña/sub-vista activa.
   const { data: debt } = useQuery({
     queryKey: ['debt', groupId, season],
     queryFn: () => penaltiesApi.getDebt(groupId, season),
-    enabled: !!groupId && rankingView === 'season' && mainTab === 'ranking',
+    enabled: !!groupId,
     staleTime: 5 * 60 * 1000,
   });
+
+  const totalDebt = useMemo(
+    () => debt?.reduce((sum, d) => sum + d.total, 0) ?? 0,
+    [debt]
+  );
 
   const { data: matchdayData, isLoading: loadingMatchday } = useQuery({
     queryKey: ['ranking-matchday', groupId, season, matchday],
@@ -366,6 +373,14 @@ export default function GroupTab() {
 
   const renderHeader = useCallback(() => (
     <View>
+      {/* Bote acumulado de la peña (suma de la deuda de todos los usuarios) */}
+      {totalDebt > 0 && (
+        <Surface style={styles.totalDebtBox} elevation={1}>
+          <Text variant="labelSmall" style={styles.totalDebtLabel}>💰 Bote acumulado de la peña</Text>
+          <Text variant="titleLarge" style={styles.totalDebtValue}>{totalDebt}€</Text>
+        </Surface>
+      )}
+
       {/* Accesos rápidos */}
       <View style={styles.quickLinks}>
         <Button
@@ -440,7 +455,7 @@ export default function GroupTab() {
       )}
     </View>
   ), [
-    hasStandings, season, mainTab, hasPremios,
+    totalDebt, hasStandings, season, mainTab, hasPremios,
     groupId, isSeasonLocked, hasPichichi, hasZamora, rankingView, matchday, rankingIsLoading,
   ]);
 
@@ -523,6 +538,14 @@ export default function GroupTab() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   list: { padding: 12, gap: 8, paddingBottom: 8 },
+
+  // Bote total
+  totalDebtBox: {
+    borderRadius: 10, padding: 14, marginBottom: 10, alignItems: 'center', gap: 2,
+    backgroundColor: colors.errorDim,
+  },
+  totalDebtLabel: { color: colors.debt, opacity: 0.9 },
+  totalDebtValue: { color: colors.debt, fontWeight: '700' },
 
   // Quick links
   quickLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
