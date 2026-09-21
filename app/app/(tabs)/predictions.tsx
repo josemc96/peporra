@@ -10,8 +10,12 @@ import { useQuery } from '@tanstack/react-query';
 import { predictionsApi, Match, Prediction } from '@/api/predictions';
 import { adminGroupApi, ScoreMultiplier } from '@/api/adminGroup';
 import { cardsApi, CARD_LABELS, CARD_EMOJI } from '@/api/cards';
+import { rankingApi, RankingEntry } from '@/api/ranking';
+import { penaltiesApi, RankingEntry as MatchdayRankingEntry } from '@/api/penalties';
+import { useAuth } from '@/context/AuthContext';
 import { useCurrentGroup } from '@/context/CurrentGroupContext';
 import { JornadaPicker } from '@/components/JornadaPicker';
+import { PlayerRow } from '@/components/PlayerRow';
 import { colors } from '@/config/theme';
 
 type Competition = 'la_liga' | 'copa_del_rey' | 'supercopa';
@@ -219,6 +223,10 @@ export default function PredictionsTab() {
   const [filterMatchday, setFilterMatchday] = useState<number | null>(
     params.matchday ? parseInt(params.matchday, 10) : null
   );
+  // Dentro de una jornada concreta, alternar entre ver sus partidos o la clasificación de
+  // los usuarios en esa jornada.
+  const [jornadaSubView, setJornadaSubView] = useState<'partidos' | 'clasificacion'>('partidos');
+  const { user } = useAuth();
   const sectionListRef = useRef<SectionList<Match, MatchdaySection>>(null);
   const hasAutoScrolled = useRef(false);
   const lastScrollTarget = useRef<{ sectionIndex: number; itemIndex: number } | null>(null);
@@ -311,6 +319,45 @@ export default function PredictionsTab() {
     predictions?.forEach((p) => map.set(p.match._id, p));
     return map;
   }, [predictions]);
+
+  // Clasificación de la jornada filtrada (solo se piden al entrar en esa sub-vista).
+  const showingJornadaRanking = filterMatchday != null && jornadaSubView === 'clasificacion';
+
+  const { data: seasonRanking } = useQuery({
+    queryKey: ['ranking', groupId, season],
+    queryFn: () => rankingApi.get(groupId, season),
+    enabled: !!groupId && showingJornadaRanking,
+  });
+
+  const { data: matchdayRanking, isLoading: loadingJornadaRanking } = useQuery({
+    queryKey: ['ranking-matchday', groupId, season, filterMatchday],
+    queryFn: () => penaltiesApi.getMatchdayRanking(groupId, season, filterMatchday!),
+    enabled: !!groupId && showingJornadaRanking,
+  });
+
+  const { data: debt } = useQuery({
+    queryKey: ['debt', groupId, season],
+    queryFn: () => penaltiesApi.getDebt(groupId, season),
+    enabled: !!groupId && showingJornadaRanking,
+  });
+
+  const seasonRankingMap = useMemo(() => {
+    const map = new Map<string, RankingEntry>();
+    seasonRanking?.forEach((e) => map.set(e.user.id, e));
+    return map;
+  }, [seasonRanking]);
+
+  const matchdayRankingMap = useMemo(() => {
+    const map = new Map<string, MatchdayRankingEntry>();
+    matchdayRanking?.ranking.forEach((e) => map.set(e.user.id, e));
+    return map;
+  }, [matchdayRanking]);
+
+  const seasonDebtMap = useMemo(() => {
+    const map = new Map<string, number>();
+    debt?.forEach((d) => map.set(d.user.id, d.total));
+    return map;
+  }, [debt]);
 
   // Todos los partidos de La Liga ordenados por fecha real de inicio (no por jornada) —
   // así un partido adelantado o aplazado aparece donde de verdad se juega, sin perderse.
@@ -494,7 +541,69 @@ export default function PredictionsTab() {
         </View>
       )}
 
-      {showAllView ? (
+      {/* Partidos / Clasificación de esa jornada — solo dentro de una jornada concreta */}
+      {competitionTab === 'la_liga' && filterMatchday != null && (
+        <View style={styles.jornadaSubTabs}>
+          <Chip
+            selected={jornadaSubView === 'partidos'}
+            onPress={() => setJornadaSubView('partidos')}
+            style={styles.jornadaSubChip}
+          >
+            Partidos
+          </Chip>
+          <Chip
+            selected={jornadaSubView === 'clasificacion'}
+            onPress={() => setJornadaSubView('clasificacion')}
+            style={styles.jornadaSubChip}
+          >
+            Clasificación
+          </Chip>
+        </View>
+      )}
+
+      {showingJornadaRanking ? (
+        <FlatList
+          data={loadingJornadaRanking ? [] : (matchdayRanking?.ranking ?? [])}
+          keyExtractor={(e) => e.user.id}
+          renderItem={({ item, index }) => {
+            const seasonEntry = seasonRankingMap.get(item.user.id);
+            return (
+              <PlayerRow
+                alias={item.user.alias}
+                isMe={item.user.id === user?.id}
+                position={index + 1}
+                exactScores={seasonEntry?.exactScores ?? 0}
+                rankingView="matchday"
+                matchday={filterMatchday!}
+                seasonPoints={seasonEntry?.points ?? 0}
+                matchdayPoints={matchdayRankingMap.get(item.user.id)?.points ?? 0}
+                seasonDebt={seasonDebtMap.get(item.user.id) ?? 0}
+                matchdayDebt={matchdayRankingMap.get(item.user.id)?.debt ?? 0}
+                onPress={() => router.push({
+                  pathname: '/user/[userId]' as never,
+                  params: {
+                    userId: item.user.id,
+                    alias: item.user.alias,
+                    points: String(seasonEntry?.points ?? 0),
+                    exactScores: String(seasonEntry?.exactScores ?? 0),
+                    position: String(seasonRanking ? seasonRanking.findIndex((e) => e.user.id === item.user.id) + 1 : 0),
+                    total: String(seasonRanking?.length ?? 0),
+                    groupId, season,
+                  },
+                })}
+              />
+            );
+          }}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            loadingJornadaRanking ? (
+              <ActivityIndicator style={{ marginTop: 24 }} />
+            ) : (
+              <Text style={styles.emptyText}>Sin datos para esta jornada todavía.</Text>
+            )
+          }
+        />
+      ) : showAllView ? (
         <SectionList
           ref={sectionListRef}
           sections={sections}
@@ -584,6 +693,8 @@ const styles = StyleSheet.create({
   jornadaBarSide: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   jornadaBarSideRight: { justifyContent: 'flex-end' },
   jornadaBarCenter: { flexShrink: 1, alignItems: 'center' },
+  jornadaSubTabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingBottom: 8 },
+  jornadaSubChip: { flex: 1 },
   sectionHeader: {
     backgroundColor: colors.bg, paddingHorizontal: 4, paddingTop: 14, paddingBottom: 6,
   },
