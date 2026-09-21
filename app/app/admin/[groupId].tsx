@@ -26,6 +26,7 @@ import { groupsApi, GroupMember } from '@/api/groups';
 import { rankingApi } from '@/api/ranking';
 import { cardsApi, CardConfig, CardDeal, CardKey, ALL_CARD_KEYS, CARD_LABELS, CARD_DESCRIPTIONS } from '@/api/cards';
 import { useAuth } from '@/context/AuthContext';
+import { JornadaPicker } from '@/components/JornadaPicker';
 
 // ─── Rule row ──────────────────────────────────────────────────────────────
 
@@ -215,6 +216,9 @@ export default function AdminPanelScreen() {
   const [newMatchday, setNewMatchday] = useState('');
   const [newMatchId, setNewMatchId] = useState('');
   const [newValue, setNewValue] = useState('2');
+  // Filtra la lista de partidos a elegir por jornada, en vez de hacer scroll entre los
+  // ~380 partidos de toda la temporada.
+  const [multMatchdayFilter, setMultMatchdayFilter] = useState<number | null>(null);
 
   const { data: multipliers, isLoading: multipliersLoading } = useQuery({
     queryKey: ['multipliers', groupId, season],
@@ -230,6 +234,16 @@ export default function AdminPanelScreen() {
   });
 
   const matchById = new Map((allMatches ?? []).map((m) => [m._id, m]));
+
+  const laLigaMatchdays = [
+    ...new Set(
+      (allMatches ?? []).filter((m) => m.competition === 'la_liga' && m.matchday != null).map((m) => m.matchday!)
+    ),
+  ].sort((a, b) => a - b);
+
+  const matchesForMultiplierFilter = multMatchdayFilter == null
+    ? []
+    : (allMatches ?? []).filter((m) => m.competition === 'la_liga' && m.matchday === multMatchdayFilter);
 
   const { mutate: createMult, isPending: creatingMult } = useMutation({
     mutationFn: () => adminGroupApi.createMultiplier(groupId, {
@@ -575,18 +589,52 @@ export default function AdminPanelScreen() {
             <TextInput label="Jornada (1-38)" value={newMatchday} onChangeText={setNewMatchday} keyboardType="numeric" mode="outlined" dense />
           )}
           {newScope === 'match' && (
-            <ScrollView style={styles.matchList} nestedScrollEnabled>
-              {(allMatches ?? []).map((m) => (
-                <List.Item
-                  key={m._id}
-                  title={`${m.homeTeam} vs ${m.awayTeam}`}
-                  description={`J${m.matchday ?? '—'} · ${new Date(m.startTime).toLocaleDateString('es-ES')}`}
-                  onPress={() => setNewMatchId(m._id)}
-                  right={() => newMatchId === m._id ? <List.Icon icon="check-circle" color={theme.colors.primary} /> : null}
-                  style={newMatchId === m._id ? { backgroundColor: theme.colors.primaryContainer } : undefined}
+            <View style={{ gap: 8 }}>
+              <View style={styles.matchJornadaRow}>
+                <JornadaPicker
+                  matchdays={laLigaMatchdays}
+                  selected={multMatchdayFilter}
+                  onSelect={(day) => { setMultMatchdayFilter(day); setNewMatchId(''); }}
                 />
-              ))}
-            </ScrollView>
+                <Text variant="bodyMedium">
+                  {multMatchdayFilter != null ? `Jornada ${multMatchdayFilter}` : 'Elige una jornada'}
+                </Text>
+              </View>
+
+              {multMatchdayFilter != null && (
+                matchesForMultiplierFilter.length === 0 ? (
+                  <Text style={{ opacity: 0.5, paddingVertical: 8 }}>Sin partidos en esa jornada.</Text>
+                ) : (
+                  matchesForMultiplierFilter.map((m) => (
+                    <List.Item
+                      key={m._id}
+                      title={`${m.homeTeam} vs ${m.awayTeam}`}
+                      description={new Date(m.startTime).toLocaleDateString('es-ES')}
+                      onPress={() => setNewMatchId(m._id)}
+                      right={() => newMatchId === m._id ? <List.Icon icon="check-circle" color={theme.colors.primary} /> : null}
+                      style={newMatchId === m._id ? { backgroundColor: theme.colors.primaryContainer } : undefined}
+                    />
+                  ))
+                )
+              )}
+
+              {/* Copa del Rey / Supercopa: pocos partidos, siempre visibles sin filtrar por jornada */}
+              {(allMatches ?? []).filter((m) => m.competition !== 'la_liga').length > 0 && (
+                <>
+                  <Text variant="labelSmall" style={{ opacity: 0.5, marginTop: 4 }}>Copa del Rey / Supercopa</Text>
+                  {(allMatches ?? []).filter((m) => m.competition !== 'la_liga').map((m) => (
+                    <List.Item
+                      key={m._id}
+                      title={`${m.homeTeam} vs ${m.awayTeam}`}
+                      description={new Date(m.startTime).toLocaleDateString('es-ES')}
+                      onPress={() => setNewMatchId(m._id)}
+                      right={() => newMatchId === m._id ? <List.Icon icon="check-circle" color={theme.colors.primary} /> : null}
+                      style={newMatchId === m._id ? { backgroundColor: theme.colors.primaryContainer } : undefined}
+                    />
+                  ))}
+                </>
+              )}
+            </View>
           )}
 
           <TextInput label="Multiplicador (×2, ×3…)" value={newValue} onChangeText={setNewValue} keyboardType="numeric" mode="outlined" dense style={{ marginTop: 8 }} />
@@ -959,7 +1007,7 @@ const styles = StyleSheet.create({
   pointsInput: { width: 64 },
   compNote: { opacity: 0.5, marginTop: 4 },
   saveRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 8 },
-  matchList: { maxHeight: 220, borderWidth: StyleSheet.hairlineWidth, borderColor: '#1F2540', borderRadius: 8 },
+  matchJornadaRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   matchCard: { borderRadius: 10, padding: 14, gap: 6 },
   resultForm: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' },
   scoreInput: { width: 80 },
