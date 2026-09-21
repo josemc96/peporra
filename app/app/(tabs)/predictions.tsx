@@ -121,23 +121,22 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
             <Text variant="titleSmall" style={[styles.team, styles.teamRight]} numberOfLines={1}>{match.awayTeam}</Text>
             {match.awayCrest ? <Image source={{ uri: match.awayCrest }} style={styles.crest} /> : null}
           </View>
-          {multiplier != null && (
-            <Chip compact style={styles.multChip} textStyle={styles.multText}>×{multiplier}</Chip>
-          )}
         </View>
         <View style={styles.dateRow}>
           <Text variant="labelSmall" style={styles.dateText}>
             {isPostponed ? 'Fecha por confirmar' : formatDateTime(match.startTime)}
           </Text>
-          {pressReveals.length > 0 && (
-            <View style={styles.pressRevealCol}>
-              {pressReveals.map((r, i) => (
-                <Text key={i} variant="labelSmall" style={styles.pressRevealText}>
-                  🎙️ {r.alias}: {r.predictedHome}-{r.predictedAway}
-                </Text>
-              ))}
-            </View>
-          )}
+          <View style={styles.dateRowRight}>
+            {pressReveals.length > 0 && (
+              <View style={styles.pressRevealCol}>
+                {pressReveals.map((r, i) => (
+                  <Text key={i} variant="labelSmall" style={styles.pressRevealText}>
+                    🎙️ {r.alias}: {r.predictedHome}-{r.predictedAway}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
         <View style={styles.predictionRow}>
           <View style={styles.predictionRowLeft}>
@@ -186,6 +185,12 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
                   <Text variant="labelSmall" style={styles.liveBadgeText}>EN CURSO</Text>
                 </View>
               )
+            )}
+            {multiplier != null && (
+              <View style={styles.multBadge}>
+                <Text style={styles.multEmoji}>🔥</Text>
+                <Text style={styles.multText}>×{multiplier}</Text>
+              </View>
             )}
           </View>
         </View>
@@ -727,9 +732,14 @@ const styles = StyleSheet.create({
   missingText: { color: colors.text2, fontStyle: 'italic' },
   spyTitle: { color: colors.text2, fontWeight: '700' },
   spyResultText: { color: colors.text1, marginTop: 1 },
-  multChip: { backgroundColor: '#FFBE0B', height: 24 },
-  multText: { color: '#000000', fontWeight: '700', fontSize: 12 },
+  multBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    backgroundColor: '#FFBE0B', borderRadius: 12, height: 22, paddingHorizontal: 8,
+  },
+  multEmoji: { fontSize: 11, lineHeight: 14 },
+  multText: { color: '#000000', fontWeight: '700', fontSize: 12, lineHeight: 14 },
   dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  dateRowRight: { alignItems: 'flex-end', gap: 4 },
   dateText: { opacity: 0.5 },
   predictionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   predictionRowLeft: { flex: 1, alignItems: 'flex-start' },
