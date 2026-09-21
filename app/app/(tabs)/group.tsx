@@ -46,7 +46,6 @@ function PlayerRow({
   const primaryDebt = isMatchday ? matchdayDebt : seasonDebt;
   const secondaryDebt = isMatchday ? seasonDebt : matchdayDebt;
   const secondaryDebtLabel = isMatchday ? `${seasonDebt}€ en total` : `${matchdayDebt}€ en J${matchday}`;
-  const showDebt = matchdayDebt > 0 || seasonDebt > 0;
 
   return (
     <Pressable onPress={onPress} android_ripple={{ color: '#0001' }}>
@@ -70,13 +69,18 @@ function PlayerRow({
             {primaryPoints} pts
           </Text>
           <Text variant="labelSmall" style={styles.pointsSecondary}>{secondaryPointsLabel}</Text>
-          {showDebt && (
+          {primaryDebt > 0 ? (
             <>
               <Text variant="labelMedium" style={styles.debtPrimary}>💸 {primaryDebt}€</Text>
               {secondaryDebt > 0 && (
                 <Text variant="labelSmall" style={styles.debtSecondary}>{secondaryDebtLabel}</Text>
               )}
             </>
+          ) : secondaryDebt > 0 && (
+            // No debe nada de la vista activa (ej. no perdió esta jornada), pero sí en la
+            // otra — se muestra igual que la línea secundaria de quien sí debe (pequeña,
+            // apagada), para no parecer que no debe nada en total.
+            <Text variant="labelSmall" style={styles.debtSecondary}>{secondaryDebtLabel}</Text>
           )}
         </View>
         {onKick && (
