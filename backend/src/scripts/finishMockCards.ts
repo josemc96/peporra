@@ -7,7 +7,8 @@
  * Lo que hace:
  *  1. Pone los 5 partidos de J99 como 'finished' con resultados reales
  *  2. Juega el_var de FakeVar: sabotea la predicción de FakeRoja en M1 (1-0 → 2-0)
- *  3. Ejecuta el job de cálculo de puntos (scoring + efectos de cartas)
+ *  3. Ejecuta el job de cálculo de puntos (scoring + efectos de cartas — incluye mimo, dupla,
+ *     espejo, comodín, borracho y reto, ya jugados en seedMockCards.ts)
  *  4. Imprime el ranking final con explicación de cada efecto
  *
  * Resultados: M0:2-1, M1:1-0, M2:2-2, M3:1-1, M4:1-1
@@ -180,8 +181,18 @@ async function main() {
   log('  🚌 el_autobus (FakeAutobus, M3): predijo 0-0 en 1-1 → 0pts pero immune → 1pt mín');
   log('  🎙️  rueda_prensa (FakeRueda→FakeMela, M4): card registrada (efecto pendiente en scoring)');
   log('  📣 la_aficion (FakeAficion→FakeDoblete): bonus = mitad de pts de FakeDoblete si en podio');
-  log('  🎲 me_la_juego (FakeMela, M4=1-1): predijo 1-1 ✓ → gana 3pts extra (CardEffect)');
+  log('  🎲 me_la_juego (FakeMela, M4=1-1): predijo 1-1 ✓ → gana 3pts extra (CardEffect, cuenta en la jornada)');
   log('  📹 el_var (FakeVar→FakeRoja, M1): cambia predicción 1-0→2-0 en partido 1-0 → pierde 3pts');
+  log('  🎭 mimo (FakeMimo copia la_roja de FakeRoja → M1 FakeLesion): FakeLesion pierde M1');
+  log('  👯 dupla (FakeDupla→FakeVar+FakeAutobus): ambos terminan con la media de sus puntos');
+  log('  🪞 espejo (FakeEspejo, M0): protegido — su 2-1 exacto no se toca aunque le ataquen');
+  log('  🃏 comodin (FakeComodin, M1=1-0): predijo 0-1 (revés) → cuenta como exacto, 4pts');
+  log('  🍺 borracho (FakeBorracho→FakeEspejo, M0): espejo activo → reflejo invierte la propia');
+  log('     predicción de FakeBorracho en M0 (1-2→2-1) → pasa a ser exacta');
+  log('  ⚔️  reto (FakeReto→FakeMela, aceptado): FakeReto acierta las 5 → gana +4 (cuenta en la');
+  log('     jornada), FakeMela -4');
+  log('  ⚔️  reto (FakeRetoReject→FakeVar, sin responder): FakeVar -2 pts (cuenta en la jornada,');
+  log('     sin dárselos a FakeRetoReject)');
   log('═══════════════════════════════════════════════════════════════');
 
   await mongoose.disconnect();

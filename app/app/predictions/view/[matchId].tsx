@@ -49,18 +49,27 @@ function cardPlayDescription(play: ActiveCardPlay): string {
   const target = play.targetUser?.alias;
   const { amount } = play.params ?? {};
 
-  switch (card) {
-    case 'la_mina':     return `${owner} plantó la mina — quien tenga el mismo resultado puntúa 0`;
-    case 'la_roja':     return `${owner} le puso tarjeta roja a ${target ?? '?'} — pierde todos sus puntos`;
-    case 'la_lesion':   return `${owner} lesionó a ${target ?? '?'} — la mitad de sus puntos`;
-    case 'el_doblete':  return `${owner} activó el doblete — sus puntos base se duplican`;
-    case 'el_autobus':  return `${owner} subió al autobús — inmune y garantiza mínimo 1 pt`;
-    case 'el_var':      return `${owner} activó el VAR — un gol de diferencia en un lado cuenta como exacto`;
-    case 'rueda_prensa': return `${owner} convocó rueda de prensa de ${target ?? '?'} — su predicción es visible para toda la peña`;
-    case 'me_la_juego':  return `${owner} apostó ${amount ?? '?'} pts — gana si acierta resultado exacto`;
-    case 'el_espia':     return `${owner} espió las predicciones de este partido`;
-    default:             return `${owner} jugó ${CARD_LABELS[card] ?? card}`;
-  }
+  const base = (() => {
+    switch (card) {
+      case 'la_mina':     return `${owner} plantó la mina — quien tenga el mismo resultado puntúa 0`;
+      case 'la_roja':     return `${owner} le puso tarjeta roja a ${target ?? '?'} — pierde todos sus puntos`;
+      case 'la_lesion':   return `${owner} lesionó a ${target ?? '?'} — la mitad de sus puntos`;
+      case 'borracho':    return `${owner} emborrachó a ${target ?? '?'} — su predicción en este partido se invierte`;
+      case 'el_doblete':  return `${owner} activó el doblete — sus puntos base se duplican`;
+      case 'el_autobus':  return `${owner} subió al autobús — inmune y garantiza mínimo 1 pt`;
+      case 'espejo':      return `${owner} sacó el espejo — inmune a Roja/Lesión/Mina, y el golpe se devuelve a quien lo lance`;
+      case 'el_var':      return `${owner} activó el VAR — un gol de diferencia en un lado cuenta como exacto`;
+      case 'comodin':     return `${owner} jugó el comodín — su resultado al revés también cuenta como exacto`;
+      case 'rueda_prensa': return `${owner} convocó rueda de prensa de ${target ?? '?'} — su predicción es visible para toda la peña`;
+      case 'me_la_juego':  return `${owner} apostó ${amount ?? '?'} pts — gana si acierta resultado exacto`;
+      case 'el_espia':     return `${owner} espió las predicciones de este partido`;
+      default:             return `${owner} jugó ${CARD_LABELS[card] ?? card}`;
+    }
+  })();
+
+  if (!play.deal.mimicked) return base;
+  const from = play.deal.mimicSource?.alias;
+  return `${base} (🎭 copiada con Mimo${from ? ` de ${from}` : ''})`;
 }
 
 function CardPlayRow({ play, myId }: { play: ActiveCardPlay; myId: string }) {
@@ -158,11 +167,14 @@ export default function MatchPredictionViewScreen() {
         case 'el_var':
         case 'rueda_prensa':
         case 'la_aficion':
+        case 'borracho':
           if (targetId) add(targetId, card);
           break;
         case 'el_autobus':
         case 'el_doblete':
         case 'me_la_juego':
+        case 'espejo':
+        case 'comodin':
           add(ownerId, card);
           break;
         case 'la_mina':

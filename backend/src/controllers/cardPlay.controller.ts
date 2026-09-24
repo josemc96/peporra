@@ -70,7 +70,8 @@ async function validatePlay(
     // ── Cards targeting your own prediction on a match ──────────────────
     case 'la_mina':
     case 'el_autobus':
-    case 'el_doblete': {
+    case 'el_doblete':
+    case 'espejo': {
       if (!matchId) throw new AppError('matchId es obligatorio para esta carta', 400);
       const match = await resolveMatch(matchId);
       assertBeforeKickoff(match);
@@ -83,7 +84,8 @@ async function validatePlay(
     // ── Cards targeting a rival on a specific match ─────────────────────
     case 'la_roja':
     case 'la_lesion':
-    case 'rueda_prensa': {
+    case 'rueda_prensa':
+    case 'borracho': {
       if (!matchId) throw new AppError('matchId es obligatorio', 400);
       if (!targetUserId) throw new AppError('targetUserId es obligatorio', 400);
       assertNotSelf(userId, targetUserId);
@@ -95,7 +97,9 @@ async function validatePlay(
     }
 
     // ── El VAR: self-buff before kickoff — ±1 miss on one side counts as exact ──
-    case 'el_var': {
+    // ── Comodín: self-buff before kickoff — el resultado al revés también cuenta ──
+    case 'el_var':
+    case 'comodin': {
       if (!matchId) throw new AppError('matchId es obligatorio', 400);
       const match = await resolveMatch(matchId);
       assertBeforeKickoff(match);
@@ -147,9 +151,162 @@ async function validatePlay(
       return { targetUserId, params: {} };
     }
 
+    // ── Dupla: promedia los puntos de jornada de 2 jugadores (pueden ser 2 rivales,
+    // no hace falta que tú seas uno de ellos) ───────────────────────────────
+    case 'dupla': {
+      const { secondUserId } = params as { secondUserId?: string };
+      if (!targetUserId) throw new AppError('targetUserId es obligatorio', 400);
+      if (!secondUserId) throw new AppError('params.secondUserId es obligatorio', 400);
+      if (targetUserId === secondUserId) throw new AppError('Debes elegir a dos jugadores distintos', 400);
+      assertIsMember(group, targetUserId);
+      assertIsMember(group, secondUserId);
+
+      // Antes de que empiece la jornada (igual que La Afición)
+      const firstMatch = await Match.findOne({
+        competition: 'la_liga', season: deal.season, matchday: deal.matchday,
+      }).sort({ startTime: 1 });
+      if (firstMatch && new Date() >= new Date(firstMatch.startTime)) {
+        throw new AppError('La jornada ya ha empezado', 409);
+      }
+
+      return { targetUserId, params: { secondUserId } };
+    }
+
+    // ── Reto: retas a un rival a ver quién queda mejor en la jornada. Se resuelve en dos
+    // fases (respondToReto + applyCardEffects.job.ts): si el rival no acepta a tiempo,
+    // pierde 2 pts sin dárselos a nadie; si acepta, al terminar la jornada quien tenga más
+    // puntos le quita 4 al otro. Siempre como puntuación GLOBAL, no de la jornada ────
+    case 'reto': {
+      if (!targetUserId) throw new AppError('targetUserId es obligatorio', 400);
+      assertNotSelf(userId, targetUserId);
+      assertIsMember(group, targetUserId);
+      const firstMatch = await Match.findOne({
+        competition: 'la_liga', season: deal.season, matchday: deal.matchday,
+      }).sort({ startTime: 1 });
+      if (firstMatch && new Date() >= new Date(firstMatch.startTime)) {
+        throw new AppError('La jornada ya ha empezado', 409);
+      }
+      return { targetUserId, params: {} };
+    }
+
     default:
       throw new AppError(`Carta desconocida: ${card}`, 400);
   }
+}
+
+// ── Mimo: elige a ciegas a quién copiar ─────────────────────────────────────
+// Al revelar, `deal.card` se sobreescribe con el tipo de carta copiado — a partir de ahí
+// el resto del sistema (jugar, puntuar, revelar, espiar) la trata como esa carta real sin
+// necesitar ningún caso especial; `mimicked`/`mimicSource` solo quedan como rastro para la UI.
+
+export async function revealMimic(req: Request, res: Response): Promise<void> {
+  const groupId = req.params.groupId as string;
+  const userId = req.user!.id;
+  const { dealId, targetUserId } = req.body as { dealId?: string; targetUserId?: string };
+
+  if (!dealId) throw new AppError('dealId es obligatorio', 400);
+  if (!targetUserId) throw new AppError('targetUserId es obligatorio', 400);
+
+  const group = await requireGroupMember(groupId, userId);
+  const deal = await resolveDeal(dealId, userId, groupId);
+
+  if (deal.card !== 'mimo') throw new AppError('Esta carta no es Mimo', 400);
+  if (deal.status !== 'pending') {
+    throw new AppError('Primero debes desbloquear la carta antes de elegir a quién copiar', 409);
+  }
+
+  assertNotSelf(userId, targetUserId);
+  assertIsMember(group, targetUserId);
+
+  const rivalDeal = await CardDeal.findOne({
+    group: groupId, season: deal.season, matchday: deal.matchday, user: targetUserId,
+  });
+  if (!rivalDeal) throw new AppError('Ese rival no tiene carta en esta jornada', 404);
+  if (rivalDeal.card === 'mimo') {
+    throw new AppError('No puedes copiar a alguien que también tiene Mimo', 400);
+  }
+
+  deal.card = rivalDeal.card;
+  deal.mimicked = true;
+  deal.mimicSource = new Types.ObjectId(targetUserId);
+  await deal.save();
+
+  res.json({ deal });
+}
+
+// ── Reto: el rival retado acepta o rechaza el desafío antes de que empiece la jornada.
+// No hace falta que el objetivo tenga ninguna carta propia — solo ser el `targetUser` de
+// la jugada. Se puede cambiar de decisión mientras la jornada no haya empezado.
+
+export async function respondToReto(req: Request, res: Response): Promise<void> {
+  const groupId = req.params.groupId as string;
+  const userId = req.user!.id;
+  const { playId, accept } = req.body as { playId?: string; accept?: boolean };
+
+  if (!playId) throw new AppError('playId es obligatorio', 400);
+  if (typeof accept !== 'boolean') throw new AppError('accept debe ser true o false', 400);
+
+  await requireGroupMember(groupId, userId);
+
+  const play = await CardPlay.findById(playId).populate('deal');
+  if (!play) throw new AppError('Reto no encontrado', 404);
+
+  const deal = play.deal as unknown as InstanceType<typeof CardDeal>;
+  if (!deal || deal.card !== 'reto') throw new AppError('Esta jugada no es un Reto', 400);
+  if (deal.group.toString() !== groupId) throw new AppError('El reto no pertenece a esta peña', 403);
+  if (!play.targetUser || play.targetUser.toString() !== userId) {
+    throw new AppError('Este reto no es para ti', 403);
+  }
+
+  const firstMatch = await Match.findOne({
+    competition: 'la_liga', season: deal.season, matchday: deal.matchday,
+  }).sort({ startTime: 1 });
+  if (firstMatch && new Date() >= new Date(firstMatch.startTime)) {
+    throw new AppError('La jornada ya ha empezado, no puedes responder', 409);
+  }
+
+  play.params = { ...play.params, retoAccepted: accept };
+  await play.save();
+
+  res.json({ play });
+}
+
+// ── Retos pendientes de respuesta contra mí, para esta jornada ─────────────────
+
+export async function getPendingRetos(req: Request, res: Response): Promise<void> {
+  const groupId = req.params.groupId as string;
+  const userId = req.user!.id;
+  const { season, matchday } = req.query as { season?: string; matchday?: string };
+  if (!season || !matchday) throw new AppError('season y matchday son obligatorios', 400);
+
+  await requireGroupMember(groupId, userId);
+
+  const matchdayNum = parseInt(matchday, 10);
+  const deals = await CardDeal.find({
+    group: groupId, season, matchday: matchdayNum, card: 'reto', status: 'played',
+  }).select('_id user').populate('user', 'alias');
+  if (deals.length === 0) {
+    res.json({ pending: [] });
+    return;
+  }
+
+  const dealMap = new Map(deals.map((d) => [(d._id as Types.ObjectId).toString(), d]));
+  const plays = await CardPlay.find({
+    deal: { $in: deals.map((d) => d._id) }, targetUser: userId,
+  }).select('_id deal params');
+
+  const pending = plays
+    .filter((p) => p.params?.retoAccepted === undefined)
+    .map((p) => {
+      const deal = dealMap.get(p.deal.toString())!;
+      const challenger = deal.user as unknown as { _id: Types.ObjectId; alias: string };
+      return {
+        playId: (p._id as Types.ObjectId).toString(),
+        challenger: { _id: challenger._id.toString(), alias: challenger.alias },
+      };
+    });
+
+  res.json({ pending });
 }
 
 // ── Main play endpoint ─────────────────────────────────────────────────────
@@ -163,6 +320,10 @@ export async function playCard(req: Request, res: Response): Promise<void> {
 
   const group = await requireGroupMember(groupId, userId);
   const deal = await resolveDeal(dealId, userId, groupId);
+
+  if (deal.card === 'mimo') {
+    throw new AppError('Primero debes elegir a quién copiar con Mimo', 409);
+  }
 
   const { targetUserId, targetMatchId, params } = await validatePlay(
     deal.card,
@@ -201,16 +362,33 @@ export async function getActiveCardPlays(req: Request, res: Response): Promise<v
 
   const dealIds = deals.map((d) => d._id);
   const plays = await CardPlay.find({ deal: { $in: dealIds } })
-    .populate({ path: 'deal', select: 'card user', populate: { path: 'user', select: 'alias' } })
+    .populate({
+      path: 'deal', select: 'card user mimicked mimicSource',
+      populate: [{ path: 'user', select: 'alias' }, { path: 'mimicSource', select: 'alias' }],
+    })
     .populate('targetUser', 'alias')
     .populate('targetMatch', 'homeTeam awayTeam startTime matchday');
+
+  // Dupla necesita el resultado final de ambos jugadores para tener sentido — se revela
+  // solo cuando toda la jornada ha terminado, no en cuanto se juega (a diferencia del
+  // resto de cartas de jornada completa, que sí se ven en cuanto se juegan).
+  const matchdayNum = parseInt(matchday, 10);
+  let matchdayFinished = true;
+  if (plays.some((p) => (p.deal as any).card === 'dupla')) {
+    const [total, pending] = await Promise.all([
+      Match.countDocuments({ competition: 'la_liga', season, matchday: matchdayNum }),
+      Match.countDocuments({ competition: 'la_liga', season, matchday: matchdayNum, status: { $ne: 'finished' } }),
+    ]);
+    matchdayFinished = total > 0 && pending === 0;
+  }
 
   // Only reveal cards whose match has started (or no match = La Afición)
   const now = new Date();
   const revealed = plays.filter((p) => {
     const card = (p.deal as any).card as CardKey;
-    if (card === 'la_aficion' || card === 'me_la_juego' || card === 'el_doblete') return true;
-    if (card === 'el_var') return true; // post-match, always visible
+    if (card === 'dupla') return matchdayFinished;
+    if (card === 'la_aficion' || card === 'me_la_juego' || card === 'el_doblete' || card === 'reto') return true;
+    if (card === 'el_var' || card === 'comodin') return true; // post-match, always visible
     const targetMatch = p.targetMatch as any;
     if (!targetMatch) return true;
     return now >= new Date(targetMatch.startTime);

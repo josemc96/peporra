@@ -156,6 +156,8 @@ export async function redealUser(req: Request, res: Response): Promise<void> {
 
   deal.card = pickRandom(config.enabledCards as CardKey[]);
   deal.status = 'pending';
+  deal.mimicked = undefined;
+  deal.mimicSource = undefined;
   await deal.save();
 
   res.json({ deal });
@@ -243,6 +245,8 @@ export async function redealAll(req: Request, res: Response): Promise<void> {
   const deals = await CardDeal.find({ group: groupId, season, matchday, status: { $in: ['locked', 'pending'] } });
   for (const deal of deals) {
     deal.card = pickRandom(enabledCards);
+    deal.mimicked = undefined;
+    deal.mimicSource = undefined;
     await deal.save();
   }
 

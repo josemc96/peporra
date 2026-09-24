@@ -2,11 +2,13 @@ import { apiFetch } from './client';
 
 export type CardKey =
   | 'la_mina' | 'la_roja' | 'la_lesion' | 'el_var' | 'el_autobus'
-  | 'el_espia' | 'rueda_prensa' | 'la_aficion' | 'el_doblete' | 'me_la_juego';
+  | 'el_espia' | 'rueda_prensa' | 'la_aficion' | 'el_doblete' | 'me_la_juego'
+  | 'mimo' | 'dupla' | 'espejo' | 'comodin' | 'borracho' | 'reto';
 
 export const ALL_CARD_KEYS: CardKey[] = [
   'la_mina', 'la_roja', 'la_lesion', 'el_var', 'el_autobus',
   'el_espia', 'rueda_prensa', 'la_aficion', 'el_doblete', 'me_la_juego',
+  'mimo', 'dupla', 'espejo', 'comodin', 'borracho', 'reto',
 ];
 
 export const CARD_LABELS: Record<CardKey, string> = {
@@ -20,6 +22,12 @@ export const CARD_LABELS: Record<CardKey, string> = {
   la_aficion: 'La Afición',
   el_doblete: 'El Doblete',
   me_la_juego: 'Me la Juego',
+  mimo: 'Mimo',
+  dupla: 'Dupla',
+  espejo: 'Espejo',
+  comodin: 'Comodín',
+  borracho: 'El Borracho',
+  reto: 'El Reto',
 };
 
 export const CARD_EMOJI: Record<CardKey, string> = {
@@ -33,6 +41,12 @@ export const CARD_EMOJI: Record<CardKey, string> = {
   la_aficion: '📣',
   el_doblete: '⚡',
   me_la_juego: '🎲',
+  mimo: '🎭',
+  dupla: '👯',
+  espejo: '🪞',
+  comodin: '🃏',
+  borracho: '🍺',
+  reto: '⚔️',
 };
 
 export const CARD_DESCRIPTIONS: Record<CardKey, string> = {
@@ -46,6 +60,12 @@ export const CARD_DESCRIPTIONS: Record<CardKey, string> = {
   la_aficion: 'Recibes la mitad de puntos de un rival que quede en el podio de jornada.',
   el_doblete: 'Doblas tus puntos base en un partido.',
   me_la_juego: 'Apuesta X puntos en un partido: si aciertas resultado exacto ganas X, si no pierdes X/2.',
+  mimo: 'Eliges a un rival a ciegas (sin saber qué carta tiene) y copias su carta.',
+  dupla: 'Eliges a 2 jugadores (pueden ser 2 rivales): al acabar la jornada, ambos quedan con la media de sus puntos.',
+  espejo: 'En un partido tuyo: si te atacan con La Roja, La Lesión o La Mina, no te afecta y el golpe se devuelve a quien lo usó (si tenía predicción ahí). A diferencia de El Autobús, no garantiza mínimo 1 punto.',
+  comodin: 'En un partido tuyo: el resultado que predigas también vale al revés para el resultado exacto (ej. 2-1 también cuenta si el real es 1-2).',
+  borracho: 'Emborrachas a un rival en un partido: su predicción se invierte (2-1 pasa a 1-2). Si tiene Autobús puesto ahí, no le afecta. Si tiene Espejo, no le afecta y te invierte a ti la tuya en ese partido.',
+  reto: 'Retas a un rival a ver quién queda mejor en la jornada (debe aceptarlo antes de que empiece): si ganas le quitas 4 puntos, si pierdes te los quita él. Si rechaza o no responde a tiempo, pierde 2 puntos sin dártelos a ti.',
 };
 
 export type CardDealStatus = 'locked' | 'pending' | 'played' | 'expired';
@@ -67,6 +87,10 @@ export interface CardDeal {
   card: CardKey;
   status: CardDealStatus;
   dealtAt: string;
+  // Mimo: una vez revelado, `card` ya es el tipo copiado — estos dos campos solo quedan
+  // como rastro de que en realidad era Mimo, para mostrarlo en la UI.
+  mimicked?: boolean;
+  mimicSource?: string;
 }
 
 export interface CardPlay {
@@ -74,17 +98,25 @@ export interface CardPlay {
   deal: string;
   targetUser?: string;
   targetMatch?: string;
-  params: { amount?: number; copiedUserId?: string };
+  params: { amount?: number; copiedUserId?: string; secondUserId?: string; retoAccepted?: boolean };
   playedAt: string;
 }
 
 export interface ActiveCardPlay {
   _id: string;
-  deal: { _id: string; card: CardKey; user: { _id: string; alias: string } };
+  deal: {
+    _id: string; card: CardKey; user: { _id: string; alias: string };
+    mimicked?: boolean; mimicSource?: { _id: string; alias: string };
+  };
   targetUser?: { _id: string; alias: string };
   targetMatch?: { _id: string; homeTeam: string; awayTeam: string; startTime: string; matchday: number };
-  params: { amount?: number; copiedUserId?: string };
+  params: { amount?: number; copiedUserId?: string; secondUserId?: string; retoAccepted?: boolean };
   playedAt: string;
+}
+
+export interface PendingReto {
+  playId: string;
+  challenger: { _id: string; alias: string };
 }
 
 const base = (groupId: string) => `/groups/${groupId}/cards`;
@@ -121,6 +153,15 @@ export const cardsApi = {
 
   unlockCard: (groupId: string, dealId: string): Promise<{ deal: CardDeal }> =>
     apiFetch(`${base(groupId)}/unlock`, json({ dealId })),
+
+  revealMimic: (groupId: string, dealId: string, targetUserId: string): Promise<{ deal: CardDeal }> =>
+    apiFetch(`${base(groupId)}/mimic`, json({ dealId, targetUserId })),
+
+  getPendingRetos: (groupId: string, season: string, matchday: number): Promise<{ pending: PendingReto[] }> =>
+    apiFetch(`${base(groupId)}/reto/pending?season=${encodeURIComponent(season)}&matchday=${matchday}`),
+
+  respondToReto: (groupId: string, playId: string, accept: boolean): Promise<{ play: CardPlay }> =>
+    apiFetch(`${base(groupId)}/reto/respond`, json({ playId, accept })),
 
   playCard: (groupId: string, body: {
     dealId: string;

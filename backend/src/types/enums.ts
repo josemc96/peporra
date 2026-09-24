@@ -28,11 +28,18 @@ export type CardKey =
   | 'rueda_prensa'
   | 'la_aficion'
   | 'el_doblete'
-  | 'me_la_juego';
+  | 'me_la_juego'
+  | 'mimo'
+  | 'dupla'
+  | 'espejo'
+  | 'comodin'
+  | 'borracho'
+  | 'reto';
 
 export const ALL_CARD_KEYS: CardKey[] = [
   'la_mina', 'la_roja', 'la_lesion', 'el_var', 'el_autobus',
   'el_espia', 'rueda_prensa', 'la_aficion', 'el_doblete', 'me_la_juego',
+  'mimo', 'dupla', 'espejo', 'comodin', 'borracho', 'reto',
 ];
 
 export type CardDealStatus = 'locked' | 'pending' | 'played' | 'expired';

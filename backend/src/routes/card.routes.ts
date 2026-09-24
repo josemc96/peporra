@@ -6,7 +6,10 @@ import {
   redealUser, redealAll, resetDeal, unlockCard,
   recalculateCardEffects, getPressConferenceReveals,
 } from '../controllers/card.controller';
-import { playCard, getActiveCardPlays, getMySpyResults } from '../controllers/cardPlay.controller';
+import {
+  playCard, getActiveCardPlays, getMySpyResults, revealMimic,
+  respondToReto, getPendingRetos,
+} from '../controllers/cardPlay.controller';
 
 const router = Router({ mergeParams: true });
 
@@ -29,6 +32,13 @@ router.post('/recalculate',  recalculateCardEffects);
 
 // Unlock
 router.post('/unlock',         unlockCard);
+
+// Mimo: elegir a ciegas a quién copiar
+router.post('/mimic',          revealMimic);
+
+// Reto: el rival responde al desafío
+router.post('/reto/respond',   respondToReto);
+router.get('/reto/pending',    getPendingRetos);
 
 // Play
 router.post('/play',           playCard);

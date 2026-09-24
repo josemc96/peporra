@@ -3,10 +3,14 @@ import { Schema, model, Document, Types } from 'mongoose';
 // params varía según la carta:
 // me_la_juego: { amount: number }
 // el_espia:    { copiedUserId?: string }
+// dupla:       { secondUserId: string } — targetUser guarda al primero de los dos elegidos
+// reto:        { retoAccepted?: boolean } — undefined = el rival aún no ha respondido
 // resto:       {}
 export interface ICardPlayParams {
   amount?: number;
   copiedUserId?: string;
+  secondUserId?: string;
+  retoAccepted?: boolean;
 }
 
 export interface ICardPlay extends Document {
