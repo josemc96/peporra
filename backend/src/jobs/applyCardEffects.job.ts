@@ -13,9 +13,10 @@ import { CardKey } from '../types/enums';
 
 interface MatchEffects {
   autobusUsers: Set<string>;
+  espejoUsers: Set<string>;
   minaPlays: Array<{ ownerId: string; home: number; away: number }>;
-  rojaTargets: Set<string>;
-  lesionTargets: Set<string>;
+  rojaPlays: Array<{ ownerId: string; targetId: string }>;
+  lesionPlays: Array<{ ownerId: string; targetId: string }>;
   dobleUsers: Set<string>;
   melaJuegoPlays: Array<{ userId: string; matchId: string; amount: number }>;
 }
@@ -25,13 +26,29 @@ interface AficionPlay {
   targetId: string;
 }
 
+interface DuplaPlay {
+  userA: string;
+  userB: string;
+}
+
+interface RetoPlay {
+  challengerId: string;
+  targetId: string;
+  accepted?: boolean;
+}
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 async function loadMatchdayCardPlays(
   groupId: Types.ObjectId,
   season: string,
   matchday: number
-): Promise<{ matchEffects: Map<string, MatchEffects>; aficionPlays: AficionPlay[] }> {
+): Promise<{
+  matchEffects: Map<string, MatchEffects>;
+  aficionPlays: AficionPlay[];
+  duplaPlays: DuplaPlay[];
+  retoPlays: RetoPlay[];
+}> {
 
   const deals = await CardDeal.find({ group: groupId, season, matchday, status: 'played' });
   const dealIds = deals.map((d) => d._id);
@@ -41,14 +58,17 @@ async function loadMatchdayCardPlays(
 
   const matchEffects = new Map<string, MatchEffects>();
   const aficionPlays: AficionPlay[] = [];
+  const duplaPlays: DuplaPlay[] = [];
+  const retoPlays: RetoPlay[] = [];
 
   function getMatchEffects(matchId: string): MatchEffects {
     if (!matchEffects.has(matchId)) {
       matchEffects.set(matchId, {
         autobusUsers: new Set(),
+        espejoUsers: new Set(),
         minaPlays: [],
-        rojaTargets: new Set(),
-        lesionTargets: new Set(),
+        rojaPlays: [],
+        lesionPlays: [],
         dobleUsers: new Set(),
         melaJuegoPlays: [],
       });
@@ -67,6 +87,9 @@ async function loadMatchdayCardPlays(
       case 'el_autobus':
         if (matchId) getMatchEffects(matchId).autobusUsers.add(userId);
         break;
+      case 'espejo':
+        if (matchId) getMatchEffects(matchId).espejoUsers.add(userId);
+        break;
       case 'la_mina': {
         if (!matchId) break;
         // Need the owner's prediction for that match to know the "dangerous" score
@@ -76,10 +99,14 @@ async function loadMatchdayCardPlays(
         break;
       }
       case 'la_roja':
-        if (matchId && play.targetUser) getMatchEffects(matchId).rojaTargets.add(play.targetUser.toString());
+        if (matchId && play.targetUser) {
+          getMatchEffects(matchId).rojaPlays.push({ ownerId: userId, targetId: play.targetUser.toString() });
+        }
         break;
       case 'la_lesion':
-        if (matchId && play.targetUser) getMatchEffects(matchId).lesionTargets.add(play.targetUser.toString());
+        if (matchId && play.targetUser) {
+          getMatchEffects(matchId).lesionPlays.push({ ownerId: userId, targetId: play.targetUser.toString() });
+        }
         break;
       case 'el_doblete':
         if (matchId) getMatchEffects(matchId).dobleUsers.add(userId);
@@ -94,10 +121,24 @@ async function loadMatchdayCardPlays(
           aficionPlays.push({ supporterId: userId, targetId: play.targetUser.toString() });
         }
         break;
+      case 'dupla':
+        if (play.targetUser && play.params?.secondUserId) {
+          duplaPlays.push({ userA: play.targetUser.toString(), userB: play.params.secondUserId as string });
+        }
+        break;
+      case 'reto':
+        if (play.targetUser) {
+          retoPlays.push({
+            challengerId: userId,
+            targetId: play.targetUser.toString(),
+            accepted: play.params?.retoAccepted,
+          });
+        }
+        break;
     }
   }
 
-  return { matchEffects, aficionPlays };
+  return { matchEffects, aficionPlays, duplaPlays, retoPlays };
 }
 
 // Resolve mina "dangerous" scores from actual predictions
@@ -131,6 +172,36 @@ async function applyMatchEffects(
     user: { $in: memberIds },
   }).select('_id user predictedHome predictedAway');
 
+  // ── Paso 1: resolver reflejos de Espejo ──────────────────────────────────
+  // Espejo protege del todo (a diferencia de El Autobús, sin el +1 garantizado) y además
+  // devuelve el golpe a quien lo lanzó, sobre SU propio resultado en este mismo partido —
+  // si el atacante no predijo este partido, el reflejo no tiene nada que penalizar, pero
+  // el protegido igualmente se libra.
+  const reflectedZero = new Set<string>();
+  const reflectedHalf = new Set<string>();
+
+  for (const { ownerId, targetId } of effects.rojaPlays) {
+    if (effects.espejoUsers.has(targetId)) reflectedZero.add(ownerId);
+  }
+  for (const { ownerId, targetId } of effects.lesionPlays) {
+    if (effects.espejoUsers.has(targetId)) reflectedHalf.add(ownerId);
+  }
+  for (const pred of predictions) {
+    const userId = pred.user.toString();
+    if (!effects.espejoUsers.has(userId)) continue;
+    for (const mina of effects.minaPlays) {
+      const hits =
+        mina.ownerId !== userId &&
+        mina.home >= 0 &&
+        mina.home === pred.predictedHome &&
+        mina.away === pred.predictedAway &&
+        mina.home === match.homeScore! &&
+        mina.away === match.awayScore!;
+      if (hits) reflectedZero.add(mina.ownerId);
+    }
+  }
+
+  // ── Paso 2: puntos finales de cada predicción ────────────────────────────
   for (const pred of predictions) {
     const userId = pred.user.toString();
 
@@ -140,7 +211,10 @@ async function applyMatchEffects(
     const preCard = score.preCardPoints;
     let finalPoints = preCard;
 
-    if (effects.autobusUsers.has(userId)) {
+    if (effects.espejoUsers.has(userId)) {
+      // Protección total — el golpe ya se reflejó arriba hacia quien lo lanzó.
+      finalPoints = preCard;
+    } else if (effects.autobusUsers.has(userId)) {
       // Immune + guaranteed 1 pt minimum
       finalPoints = Math.max(preCard, 1);
     } else {
@@ -155,12 +229,12 @@ async function applyMatchEffects(
           m.away === match.awayScore!
       );
 
-      const hitByRoja = effects.rojaTargets.has(userId);
-      const hitByLesion = effects.lesionTargets.has(userId);
+      const hitByRoja = effects.rojaPlays.some((p) => p.targetId === userId) || reflectedZero.has(userId);
+      const hitByLesion = effects.lesionPlays.some((p) => p.targetId === userId) || reflectedHalf.has(userId);
       const hasDoble = effects.dobleUsers.has(userId);
 
       if (hitByRoja || hitByMina) {
-        // 0 pts — max damage (Roja and Mina both result in 0)
+        // 0 pts — max damage (Roja, Mina y los reflejos de Espejo resultan en 0)
         finalPoints = 0;
       } else if (hitByLesion && hasDoble) {
         // Cancel each other out → preCardPoints unchanged
@@ -209,20 +283,17 @@ async function processMelaJuego(
   }
 }
 
-// ── La Afición resolution ──────────────────────────────────────────────────
+// ── Puntos de jornada por usuario (PredictionScore ya post-efectos de partido) ──────────
+// Compartido entre La Afición (necesita el podio) y Dupla (necesita la media de 2).
 
-async function processLaAficion(
+async function computeMatchdayPredictionPoints(
   groupId: Types.ObjectId,
   season: string,
   matchday: number,
-  memberIds: string[],
-  aficionPlays: AficionPlay[]
-): Promise<void> {
-  if (aficionPlays.length === 0) return;
-
-  // Compute matchday PredictionScore ranking (post card effects)
+  memberIds: string[]
+): Promise<Map<string, number> | null> {
   const matchIds = (await Match.find({ competition: 'la_liga', season, matchday }).select('_id')).map((m) => m._id);
-  if (!matchIds.length) return;
+  if (!matchIds.length) return null;
 
   const predictions = await Prediction.find({ match: { $in: matchIds }, user: { $in: memberIds } }).select('_id user');
   const predIdsByUser = new Map<string, Types.ObjectId[]>();
@@ -237,6 +308,23 @@ async function processLaAficion(
     const scores = await PredictionScore.find({ prediction: { $in: predIds }, group: groupId }).select('points');
     matchdayPoints.set(uid, scores.reduce((s, sc) => s + sc.points, 0));
   }
+
+  return matchdayPoints;
+}
+
+// ── La Afición resolution ──────────────────────────────────────────────────
+
+async function processLaAficion(
+  groupId: Types.ObjectId,
+  season: string,
+  matchday: number,
+  memberIds: string[],
+  aficionPlays: AficionPlay[]
+): Promise<void> {
+  if (aficionPlays.length === 0) return;
+
+  const matchdayPoints = await computeMatchdayPredictionPoints(groupId, season, matchday, memberIds);
+  if (!matchdayPoints) return;
 
   const sorted = [...matchdayPoints.entries()].sort((a, b) => b[1] - a[1]);
   const podium = new Set(sorted.slice(0, 3).map(([uid]) => uid));
@@ -255,6 +343,100 @@ async function processLaAficion(
   }
 }
 
+// ── Dupla resolution ─────────────────────────────────────────────────────────
+// Los 2 jugadores elegidos acaban la jornada con la media de sus puntos — se implementa
+// como un ajuste (CardEffect) por cabeza que, sumado a su PredictionScore de la jornada,
+// deja a los dos en esa media exacta (puede llevar decimales, no se redondea).
+
+async function processDupla(
+  groupId: Types.ObjectId,
+  season: string,
+  matchday: number,
+  memberIds: string[],
+  duplaPlays: DuplaPlay[]
+): Promise<void> {
+  if (duplaPlays.length === 0) return;
+
+  const matchdayPoints = await computeMatchdayPredictionPoints(groupId, season, matchday, memberIds);
+  if (!matchdayPoints) return;
+
+  for (const { userA, userB } of duplaPlays) {
+    const pointsA = matchdayPoints.get(userA) ?? 0;
+    const pointsB = matchdayPoints.get(userB) ?? 0;
+    const average = (pointsA + pointsB) / 2;
+
+    await CardEffect.findOneAndUpdate(
+      { group: groupId, season, matchday, user: userA, card: 'dupla' },
+      { group: groupId, season, matchday, user: new Types.ObjectId(userA), card: 'dupla', points: average - pointsA },
+      { upsert: true }
+    );
+    await CardEffect.findOneAndUpdate(
+      { group: groupId, season, matchday, user: userB, card: 'dupla' },
+      { group: groupId, season, matchday, user: new Types.ObjectId(userB), card: 'dupla', points: average - pointsB },
+      { upsert: true }
+    );
+  }
+}
+
+// ── Reto resolution ───────────────────────────────────────────────────────────
+// Dos fases, cada una con su propio disparador:
+//  1. En cuanto empieza la jornada: retos sin aceptar (rechazados o sin respuesta) hacen
+//     que el retado pierda 2 pts, sin dárselos al retador.
+//  2. Cuando la jornada termina del todo: retos aceptados comparan puntos de jornada —
+//     quien tenga más le quita 4 al otro (empate = nadie gana nada).
+// Cuenta como puntuación normal de esa jornada (ranking de jornada Y deuda/bote, ver
+// applyMatchdayPenalties.job.ts) — para cuando se reparte la penalización, la jornada ya
+// ha terminado del todo y ambas fases de Reto (incluida la de rechazo, disparada antes,
+// en el kickoff) ya están resueltas. Se recalcula el total absoluto de cada usuario en
+// cada pasada (no se incrementa) para que rerun sea idempotente.
+
+async function processReto(
+  groupId: Types.ObjectId,
+  season: string,
+  matchday: number,
+  memberIds: string[],
+  retoPlays: RetoPlay[],
+  matchdayStarted: boolean,
+  matchdayComplete: boolean
+): Promise<void> {
+  if (retoPlays.length === 0) return;
+
+  const totals = new Map<string, number>();
+  const addPoints = (userId: string, delta: number) => totals.set(userId, (totals.get(userId) ?? 0) + delta);
+
+  const acceptedPlays: RetoPlay[] = [];
+  for (const play of retoPlays) {
+    if (play.accepted === true) {
+      acceptedPlays.push(play);
+    } else if (matchdayStarted) {
+      addPoints(play.targetId, -2);
+    }
+  }
+
+  if (acceptedPlays.length > 0 && matchdayComplete) {
+    const matchdayPoints = await computeMatchdayPredictionPoints(groupId, season, matchday, memberIds);
+    if (matchdayPoints) {
+      for (const { challengerId, targetId } of acceptedPlays) {
+        const challengerPts = matchdayPoints.get(challengerId) ?? 0;
+        const targetPts = matchdayPoints.get(targetId) ?? 0;
+        if (challengerPts === targetPts) continue; // empate: nadie le quita puntos a nadie
+        const winnerId = challengerPts > targetPts ? challengerId : targetId;
+        const loserId = winnerId === challengerId ? targetId : challengerId;
+        addPoints(winnerId, 4);
+        addPoints(loserId, -4);
+      }
+    }
+  }
+
+  for (const [userId, points] of totals.entries()) {
+    await CardEffect.findOneAndUpdate(
+      { group: groupId, season, matchday, user: userId, card: 'reto' },
+      { group: groupId, season, matchday, user: new Types.ObjectId(userId), card: 'reto', points },
+      { upsert: true }
+    );
+  }
+}
+
 // ── Main job ───────────────────────────────────────────────────────────────
 
 export async function applyCardEffects(season: string): Promise<{ matchdaysProcessed: number }> {
@@ -266,16 +448,20 @@ export async function applyCardEffects(season: string): Promise<{ matchdaysProce
     if (!config || config.enabledCards.length === 0) continue;
 
     const allMatchdays = await Match.find({ competition: 'la_liga', season, matchday: { $ne: null } })
-      .select('matchday status');
+      .select('matchday status startTime');
 
     // Build matchday status map
     const matchdayStatus = new Map<number, { total: number; finished: number }>();
+    const matchdayEarliestStart = new Map<number, Date>();
     for (const m of allMatchdays) {
       const day = m.matchday!;
       const entry = matchdayStatus.get(day) ?? { total: 0, finished: 0 };
       entry.total++;
       if (m.status === 'finished') entry.finished++;
       matchdayStatus.set(day, entry);
+
+      const cur = matchdayEarliestStart.get(day);
+      if (!cur || m.startTime < cur) matchdayEarliestStart.set(day, m.startTime);
     }
 
     // Matchdays with at least one finished match (for match-level cards)
@@ -283,16 +469,29 @@ export async function applyCardEffects(season: string): Promise<{ matchdaysProce
       .filter(([, s]) => s.finished > 0)
       .map(([day]) => day);
 
-    // Matchdays fully finished (required for La Afición which needs full matchday ranking)
+    // Matchdays fully finished (required for La Afición/Dupla, que necesitan el ranking
+    // de jornada completo, y para la fase de "gana/pierde" de Reto)
     const completedMatchdays = new Set(
       [...matchdayStatus.entries()]
         .filter(([, s]) => s.total > 0 && s.total === s.finished)
         .map(([day]) => day)
     );
 
-    for (const matchday of matchdaysWithFinished) {
+    // Matchdays ya empezadas (kickoff del primer partido ya pasado) — Reto necesita
+    // detectar esto ANTES de que termine ningún partido, para penalizar los retos sin
+    // aceptar en cuanto arranca la jornada, no cuando el primer partido termina.
+    const now = new Date();
+    const matchdaysStarted = new Set(
+      [...matchdayEarliestStart.entries()]
+        .filter(([, start]) => now >= start)
+        .map(([day]) => day)
+    );
+
+    const matchdaysToProcess = [...new Set([...matchdaysWithFinished, ...matchdaysStarted])];
+
+    for (const matchday of matchdaysToProcess) {
       const matches = await Match.find({ competition: 'la_liga', season, matchday, status: 'finished' });
-      const { matchEffects, aficionPlays } = await loadMatchdayCardPlays(group._id as Types.ObjectId, season, matchday);
+      const { matchEffects, aficionPlays, duplaPlays, retoPlays } = await loadMatchdayCardPlays(group._id as Types.ObjectId, season, matchday);
 
       // Match-level effects (Mina, Roja, Lesión, Autobús, Doblete) — applied as each match finishes
       for (const match of matches) {
@@ -305,12 +504,21 @@ export async function applyCardEffects(season: string): Promise<{ matchdaysProce
       const allMelaJuego = [...matchEffects.values()].flatMap((e) => e.melaJuegoPlays);
       await processMelaJuego(group._id as Types.ObjectId, season, matchday, matches, allMelaJuego);
 
-      // La Afición needs the full post-effect ranking, so only runs when matchday is complete
+      // La Afición y Dupla necesitan el ranking de jornada ya completo (post-efectos), así
+      // que solo se resuelven cuando la jornada ha terminado del todo.
+      const memberIds = group.members.map((m) => m.toString());
       if (completedMatchdays.has(matchday)) {
-        const memberIds = group.members.map((m) => m.toString());
         await processLaAficion(group._id as Types.ObjectId, season, matchday, memberIds, aficionPlays);
+        await processDupla(group._id as Types.ObjectId, season, matchday, memberIds, duplaPlays);
         matchdaysProcessed++;
       }
+
+      // Reto tiene sus dos fases gestionadas dentro de processReto (timeout en cuanto
+      // empieza, gana/pierde cuando termina) — se llama siempre que haya jugadas de reto.
+      await processReto(
+        group._id as Types.ObjectId, season, matchday, memberIds, retoPlays,
+        matchdaysStarted.has(matchday), completedMatchdays.has(matchday)
+      );
     }
   }
 

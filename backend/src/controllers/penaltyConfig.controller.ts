@@ -129,8 +129,9 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
     }
   }
 
-  // Puntos de cartas de esta jornada (Me la Juego / La Afición) — no tocan PredictionScore,
-  // igual que en el ranking de temporada (ranking.controller.ts) hay que sumarlos aparte.
+  // Puntos de cartas de esta jornada (La Afición, Dupla, Me la Juego, Reto...) — no tocan
+  // PredictionScore, igual que en el ranking de temporada (ranking.controller.ts) hay que
+  // sumarlos aparte.
   const cardEffects = await CardEffect.find({ group: groupId, season, matchday: matchdayNum });
   for (const effect of cardEffects) {
     const key = effect.user.toString();

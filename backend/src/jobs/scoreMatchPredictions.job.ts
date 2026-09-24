@@ -6,6 +6,7 @@ import { Group } from '../models/Group';
 import { Rule } from '../models/Rule';
 import { CardDeal } from '../models/CardDeal';
 import { CardPlay } from '../models/CardPlay';
+import { CardKey } from '../types/enums';
 import { ruleEvaluators } from '../services/rules/registry';
 import { resolveActiveRules } from '../services/rules/resolveActiveRules';
 import { resolveMultiplier } from '../services/rules/resolveMultiplier';
@@ -18,12 +19,55 @@ function varCoversResult(pH: number, pA: number, rH: number, rA: number): boolea
   return false;
 }
 
-async function hasVarPlay(userId: Types.ObjectId, groupId: Types.ObjectId, season: string, matchday: number | undefined, matchId: Types.ObjectId): Promise<boolean> {
+// Comodín: el resultado predicho AL REVÉS también cuenta como exacto (2-1 vale también
+// como si hubieras puesto 1-2). Si ya era exacto de por sí, no hace falta el comodín.
+function comodinCoversResult(pH: number, pA: number, rH: number, rA: number): boolean {
+  if (pH === rH && pA === rA) return false; // already exact, comodín not needed
+  return pH === rA && pA === rH;
+}
+
+async function hasCardPlay(
+  card: CardKey,
+  userId: Types.ObjectId, groupId: Types.ObjectId, season: string, matchday: number | undefined, matchId: Types.ObjectId
+): Promise<boolean> {
   if (matchday == null) return false;
-  const deal = await CardDeal.findOne({ user: userId, group: groupId, season, matchday, card: 'el_var', status: 'played' });
+  const deal = await CardDeal.findOne({ user: userId, group: groupId, season, matchday, card, status: 'played' });
   if (!deal) return false;
   const play = await CardPlay.findOne({ deal: deal._id, targetMatch: matchId });
   return !!play;
+}
+
+// El Borracho: invierte la predicción de la víctima en ese partido (2-1 pasa a 1-2), salvo
+// que tenga El Espejo puesto ahí — entonces no le afecta y el golpe recae sobre el propio
+// atacante, en SU predicción de ese mismo partido (si la tiene) — o que tenga El Autobús,
+// que simplemente le hace inmune (sin reflejar el golpe a nadie).
+async function borrachoSwapActive(
+  userId: Types.ObjectId, groupId: Types.ObjectId, season: string, matchday: number | undefined, matchId: Types.ObjectId
+): Promise<boolean> {
+  if (matchday == null) return false;
+
+  // ¿Me emborracharon a mí en este partido?
+  const borrachoDeals = await CardDeal.find({ group: groupId, season, matchday, card: 'borracho', status: 'played' })
+    .select('_id user');
+  if (borrachoDeals.length > 0) {
+    const dealIds = borrachoDeals.map((d) => d._id);
+    const attackPlay = await CardPlay.findOne({ deal: { $in: dealIds }, targetUser: userId, targetMatch: matchId });
+    if (attackPlay) {
+      const protectedByEspejo = await hasCardPlay('espejo', userId, groupId, season, matchday, matchId);
+      const protectedByAutobus = await hasCardPlay('el_autobus', userId, groupId, season, matchday, matchId);
+      // Si tengo Espejo, el golpe no me afecta a mí — se resuelve más abajo, cuando se
+      // puntúe la predicción del propio atacante. Si tengo Autobús, simplemente no me afecta.
+      return !protectedByEspejo && !protectedByAutobus;
+    }
+  }
+
+  // Si no me atacaron a mí, ¿soy yo el atacante y mi golpe fue reflejado por el Espejo
+  // de mi objetivo?
+  const myDeal = await CardDeal.findOne({ user: userId, group: groupId, season, matchday, card: 'borracho', status: 'played' });
+  if (!myDeal) return false;
+  const myPlay = await CardPlay.findOne({ deal: myDeal._id, targetMatch: matchId });
+  if (!myPlay || !myPlay.targetUser) return false;
+  return hasCardPlay('espejo', myPlay.targetUser as Types.ObjectId, groupId, season, matchday, matchId);
 }
 
 export interface ScoreMatchPredictionsResult {
@@ -67,21 +111,41 @@ export async function scoreMatchPredictions(): Promise<ScoreMatchPredictionsResu
 
       const activeRules = await resolveActiveRules(group._id as Types.ObjectId, match.season, 'match');
 
-      const varActive = await hasVarPlay(
-        prediction.user as Types.ObjectId,
-        group._id as Types.ObjectId,
-        match.season,
-        match.matchday,
-        match._id as Types.ObjectId,
+      const varActive = await hasCardPlay(
+        'el_var', prediction.user as Types.ObjectId, group._id as Types.ObjectId,
+        match.season, match.matchday, match._id as Types.ObjectId,
+      );
+      const comodinActive = await hasCardPlay(
+        'comodin', prediction.user as Types.ObjectId, group._id as Types.ObjectId,
+        match.season, match.matchday, match._id as Types.ObjectId,
+      );
+      const borrachoSwap = await borrachoSwapActive(
+        prediction.user as Types.ObjectId, group._id as Types.ObjectId,
+        match.season, match.matchday, match._id as Types.ObjectId,
       );
 
       const pH = prediction.predictedHome;
       const pA = prediction.predictedAway;
       const rH = match.homeScore!;
       const rA = match.awayScore!;
-      // If VAR is active and the prediction misses exact by ±1 on one side, treat as exact
-      const effectiveHome = (varActive && varCoversResult(pH, pA, rH, rA)) ? rH : pH;
-      const effectiveAway = (varActive && varCoversResult(pH, pA, rH, rA)) ? rA : pA;
+
+      // El Borracho invierte la predicción base (salvo Espejo de por medio, ver arriba);
+      // VAR y Comodín se evalúan ya sobre ese resultado base, no sobre el original.
+      const baseHome = borrachoSwap ? pA : pH;
+      const baseAway = borrachoSwap ? pH : pA;
+
+      // VAR: si fallas por 1 gol en un lado (y aciertas el otro), cuenta como exacto.
+      // Comodín: si el resultado al revés coincide con el real, también cuenta como exacto.
+      // Un usuario solo puede tener una carta por jornada, así que nunca coinciden los dos.
+      let effectiveHome = baseHome;
+      let effectiveAway = baseAway;
+      if (varActive && varCoversResult(baseHome, baseAway, rH, rA)) {
+        effectiveHome = rH;
+        effectiveAway = rA;
+      } else if (comodinActive && comodinCoversResult(baseHome, baseAway, rH, rA)) {
+        effectiveHome = rH;
+        effectiveAway = rA;
+      }
 
       let totalPoints = 0;
       const ruleBreakdown: { rule: Types.ObjectId; points: number }[] = [];

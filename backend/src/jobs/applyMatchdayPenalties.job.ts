@@ -4,9 +4,15 @@ import { Prediction } from '../models/Prediction';
 import { PredictionScore } from '../models/PredictionScore';
 import { PenaltyConfig } from '../models/PenaltyConfig';
 import { MatchdayPenalty } from '../models/MatchdayPenalty';
+import { CardEffect } from '../models/CardEffect';
 import { Group } from '../models/Group';
 
-// Returns matchday points per user for a given group+season+matchday
+// Returns matchday points per user for a given group+season+matchday — igual que el
+// ranking de jornada (penaltyConfig.controller.ts getMatchdayRanking): predicciones +
+// efectos de cartas de esa jornada (La Afición, Dupla, Me la Juego, Reto...). Así el bote
+// reparte en base a los MISMOS puntos que ve el usuario en el ranking de esa jornada.
+// Esta función solo se llama una vez la jornada está completa (ver isMatchdayComplete),
+// así que para entonces todos los efectos de cartas de esa jornada ya están resueltos.
 async function computeMatchdayPoints(
   groupId: Types.ObjectId,
   season: string,
@@ -20,18 +26,26 @@ async function computeMatchdayPoints(
 
   const matchIds = matches.map((m) => m._id);
   const predictions = await Prediction.find({ match: { $in: matchIds } }).select('_id user');
-  if (!predictions.length) return totals;
+  if (predictions.length) {
+    const predUserMap = new Map(predictions.map((p) => [p._id.toString(), p.user.toString()]));
+    const scores = await PredictionScore.find({
+      group: groupId,
+      prediction: { $in: predictions.map((p) => p._id) },
+    }).select('prediction points');
 
-  const predUserMap = new Map(predictions.map((p) => [p._id.toString(), p.user.toString()]));
-  const scores = await PredictionScore.find({
-    group: groupId,
-    prediction: { $in: predictions.map((p) => p._id) },
-  }).select('prediction points');
+    for (const score of scores) {
+      const userId = predUserMap.get(score.prediction.toString());
+      if (userId && totals.has(userId)) {
+        totals.set(userId, (totals.get(userId) ?? 0) + score.points);
+      }
+    }
+  }
 
-  for (const score of scores) {
-    const userId = predUserMap.get(score.prediction.toString());
-    if (userId && totals.has(userId)) {
-      totals.set(userId, (totals.get(userId) ?? 0) + score.points);
+  const cardEffects = await CardEffect.find({ group: groupId, season, matchday }).select('user points');
+  for (const effect of cardEffects) {
+    const userId = effect.user.toString();
+    if (totals.has(userId)) {
+      totals.set(userId, (totals.get(userId) ?? 0) + effect.points);
     }
   }
 

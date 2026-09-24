@@ -13,16 +13,16 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { cardsApi, CardKey, CARD_LABELS, CARD_DESCRIPTIONS, CARD_EMOJI, CardDeal } from '@/api/cards';
+import { cardsApi, CardKey, CARD_LABELS, CARD_DESCRIPTIONS, CARD_EMOJI, CardDeal, PendingReto } from '@/api/cards';
 import { predictionsApi, Match } from '@/api/predictions';
 import { groupsApi, GroupMember } from '@/api/groups';
 import { ApiError } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 
 // Cards that need the user to pick a match (same matchday, before kickoff)
-const NEEDS_MATCH: CardKey[] = ['la_mina', 'el_autobus', 'el_doblete', 'la_roja', 'la_lesion', 'rueda_prensa', 'me_la_juego', 'el_espia', 'el_var'];
+const NEEDS_MATCH: CardKey[] = ['la_mina', 'el_autobus', 'el_doblete', 'la_roja', 'la_lesion', 'rueda_prensa', 'me_la_juego', 'el_espia', 'el_var', 'espejo', 'comodin', 'borracho'];
 // Cards that need a rival picked
-const NEEDS_RIVAL: CardKey[] = ['la_roja', 'la_lesion', 'rueda_prensa', 'la_aficion'];
+const NEEDS_RIVAL: CardKey[] = ['la_roja', 'la_lesion', 'rueda_prensa', 'la_aficion', 'borracho', 'reto'];
 // Cards that need a finished match
 const NEEDS_FINISHED_MATCH: CardKey[] = [];
 
@@ -84,6 +84,47 @@ function RivalPicker({
   );
 }
 
+// ── Pending Reto: banner para responder a un desafío recibido ──────────────────
+
+function PendingRetoCard({
+  groupId,
+  pending,
+  onResponded,
+}: {
+  groupId: string;
+  pending: PendingReto;
+  onResponded: () => void;
+}) {
+  const theme = useTheme();
+  const [error, setError] = useState<string | null>(null);
+
+  const { mutate: respond, isPending } = useMutation({
+    mutationFn: (accept: boolean) => cardsApi.respondToReto(groupId, pending.playId, accept),
+    onSuccess: onResponded,
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Error al responder'),
+  });
+
+  return (
+    <Surface style={styles.retoSurface} elevation={2}>
+      <Text style={{ fontSize: 28 }}>⚔️</Text>
+      <Text variant="bodyMedium" style={{ textAlign: 'center' }}>
+        <Text style={{ fontWeight: '700' }}>{pending.challenger.alias}</Text> te ha retado a ver
+        quién queda mejor esta jornada. Si ganas le quitas 4 pts, si pierdes te los quita él.
+        Si rechazas (o no respondes antes de que empiece la jornada), pierdes 2 pts.
+      </Text>
+      {error && <Text variant="bodySmall" style={{ color: theme.colors.error }}>{error}</Text>}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Button mode="contained" onPress={() => { setError(null); respond(true); }} loading={isPending} disabled={isPending}>
+          Aceptar
+        </Button>
+        <Button mode="outlined" onPress={() => { setError(null); respond(false); }} loading={isPending} disabled={isPending}>
+          Rechazar
+        </Button>
+      </View>
+    </Surface>
+  );
+}
+
 // ── Main screen ─────────────────────────────────────────────────────────────
 
 export default function CardPlayScreen() {
@@ -98,6 +139,7 @@ export default function CardPlayScreen() {
   // Inputs
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [selectedRivalId, setSelectedRivalId] = useState<string | null>(null);
+  const [selectedSecondUserId, setSelectedSecondUserId] = useState<string | null>(null);
   const [betAmount, setBetAmount] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -109,6 +151,15 @@ export default function CardPlayScreen() {
     queryFn: () => cardsApi.getMyDeal(groupId, season, matchdayNum),
     enabled: !!groupId && !!season && !!matchday,
   });
+
+  // Retos pendientes de respuesta contra mí — independiente de qué carta tenga yo esta
+  // jornada (puede que no tenga carta de Reto, o incluso ninguna carta).
+  const { data: pendingRetosData } = useQuery({
+    queryKey: ['pending-retos', groupId, season, matchday],
+    queryFn: () => cardsApi.getPendingRetos(groupId, season, matchdayNum),
+    enabled: !!groupId && !!season && !!matchday,
+  });
+  const pendingRetos = pendingRetosData?.pending ?? [];
 
   const deal = dealData?.deal ?? null;
   const card = deal?.card ?? null;
@@ -132,7 +183,9 @@ export default function CardPlayScreen() {
   const { data: groupData } = useQuery({
     queryKey: ['group-detail', groupId],
     queryFn: () => groupsApi.get(groupId),
-    enabled: !!groupId && needsRival && deal?.status === 'pending',
+    enabled: !!groupId && !!deal && (
+      (needsRival || card === 'mimo' || card === 'dupla') && deal.status === 'pending' || !!deal.mimicked
+    ),
   });
 
   const { data: cardConfig } = useQuery({
@@ -158,6 +211,22 @@ export default function CardPlayScreen() {
     },
   });
 
+  // ── Mimo: elegir a ciegas a quién copiar ────────────────────────────────────
+
+  const { mutate: revealMimic, isPending: revealingMimic } = useMutation({
+    mutationFn: () => {
+      if (!deal || !selectedRivalId) throw new Error('Elige un rival');
+      return cardsApi.revealMimic(groupId, deal._id, selectedRivalId);
+    },
+    onSuccess: () => {
+      setSelectedRivalId(null);
+      qc.invalidateQueries({ queryKey: ['my-deal', groupId, season, matchday] });
+    },
+    onError: (e) => {
+      setErrorMsg(e instanceof ApiError ? e.message : 'Error al copiar la carta');
+    },
+  });
+
   // ── Play mutation ─────────────────────────────────────────────────────────
 
   const { mutate: playCard, isPending: playing } = useMutation({
@@ -168,6 +237,7 @@ export default function CardPlayScreen() {
       if (selectedRivalId) body.targetUserId = selectedRivalId;
 
       if (card === 'me_la_juego') body.params = { amount: parseInt(betAmount, 10) };
+      if (card === 'dupla' && selectedSecondUserId) body.params = { secondUserId: selectedSecondUserId };
 
       return cardsApi.playCard(groupId, body);
     },
@@ -194,12 +264,18 @@ export default function CardPlayScreen() {
     }
     if (card === 'rueda_prensa') return !!selectedMatchId && !!selectedRivalId;
     if (card === 'el_espia') return !!selectedMatchId;
+    if (card === 'dupla') {
+      return !!selectedRivalId && !!selectedSecondUserId && selectedRivalId !== selectedSecondUserId;
+    }
     return true;
   }
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const selectedMatch = availableMatches.find((m) => m._id === selectedMatchId);
+  const mimicSourceAlias = deal?.mimicSource
+    ? groupData?.members.find((m) => m._id === deal.mimicSource)?.alias
+    : undefined;
 
   if (dealLoading) {
     return (
@@ -209,16 +285,32 @@ export default function CardPlayScreen() {
     );
   }
 
+  const pendingRetosBanner = pendingRetos.length > 0 && (
+    <View style={{ gap: 12 }}>
+      {pendingRetos.map((p) => (
+        <PendingRetoCard
+          key={p.playId}
+          groupId={groupId}
+          pending={p}
+          onResponded={() => qc.invalidateQueries({ queryKey: ['pending-retos', groupId, season, matchday] })}
+        />
+      ))}
+    </View>
+  );
+
   if (!deal) {
     return (
-      <View style={styles.centered}>
-        <Text variant="bodyLarge" style={{ opacity: 0.5 }}>
-          Sin carta en J{matchdayNum}
-        </Text>
-        <Text variant="bodySmall" style={{ opacity: 0.4, marginTop: 8, textAlign: 'center' }}>
-          Las cartas se reparten automáticamente antes de cada jornada.
-        </Text>
-      </View>
+      <ScrollView style={styles.root} contentContainerStyle={styles.container}>
+        {pendingRetosBanner}
+        <View style={styles.centered}>
+          <Text variant="bodyLarge" style={{ opacity: 0.5 }}>
+            Sin carta en J{matchdayNum}
+          </Text>
+          <Text variant="bodySmall" style={{ opacity: 0.4, marginTop: 8, textAlign: 'center' }}>
+            Las cartas se reparten automáticamente antes de cada jornada.
+          </Text>
+        </View>
+      </ScrollView>
     );
   }
 
@@ -238,6 +330,8 @@ export default function CardPlayScreen() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
+      {pendingRetosBanner}
+
       {/* ── Card display ── */}
       {deal.status === 'locked' ? (
         <Surface style={[styles.cardSurface, styles.lockedSurface]} elevation={3}>
@@ -256,6 +350,11 @@ export default function CardPlayScreen() {
           <Text style={styles.cardEmoji}>{CARD_EMOJI[deal.card]}</Text>
           <Text variant="headlineSmall" style={styles.cardName}>{CARD_LABELS[deal.card]}</Text>
           <Text variant="bodyMedium" style={styles.cardDesc}>{CARD_DESCRIPTIONS[deal.card]}</Text>
+          {deal.mimicked && (
+            <Text variant="labelMedium" style={{ color: theme.colors.secondary }}>
+              🎭 Copiada con Mimo{mimicSourceAlias ? ` de ${mimicSourceAlias}` : ''}
+            </Text>
+          )}
           <View style={styles.statusRow}>
             <Text variant="labelMedium" style={{ color: statusColor }}>● {statusLabel}</Text>
             <Text variant="labelSmall" style={{ opacity: 0.5 }}>J{matchdayNum}</Text>
@@ -300,14 +399,74 @@ export default function CardPlayScreen() {
         </Text>
       )}
 
-      {/* ── Play form (only if pending) ── */}
-      {deal.status === 'pending' && !successMsg && (
+      {/* ── Mimo: elige a ciegas a quién copiar ── */}
+      {deal.status === 'pending' && !successMsg && card === 'mimo' && (
         <>
+          <Text variant="titleSmall" style={styles.sectionTitle}>
+            Elige un rival a ciegas — copiarás su carta, sea la que sea
+          </Text>
+          {!groupData ? <ActivityIndicator style={{ marginTop: 8 }} /> : (
+            <RivalPicker
+              members={groupData.members}
+              selectedId={selectedRivalId}
+              onSelect={setSelectedRivalId}
+              excludeId={user?.id ?? ''}
+            />
+          )}
+
+          {errorMsg && (
+            <Text variant="bodySmall" style={{ color: theme.colors.error, marginTop: 4 }}>{errorMsg}</Text>
+          )}
+
+          <Button
+            mode="contained"
+            icon="drama-masks"
+            onPress={() => { setErrorMsg(null); revealMimic(); }}
+            loading={revealingMimic}
+            disabled={revealingMimic || !selectedRivalId}
+            style={styles.playBtn}
+          >
+            Copiar carta
+          </Button>
+        </>
+      )}
+
+      {/* ── Play form (only si ya se resolvió a una carta real) ── */}
+      {deal.status === 'pending' && !successMsg && card !== 'mimo' && (
+        <>
+          {/* Dupla: 2 jugadores (pueden ser 2 rivales, no hace falta ser uno de los dos) */}
+          {card === 'dupla' && (
+            <>
+              <Text variant="bodySmall" style={{ opacity: 0.6, marginBottom: 4 }}>
+                Al acabar la jornada, los dos quedarán con la media de sus puntos.
+              </Text>
+              <Text variant="titleSmall" style={styles.sectionTitle}>Jugador 1</Text>
+              {!groupData ? <ActivityIndicator style={{ marginTop: 8 }} /> : (
+                <RivalPicker
+                  members={groupData.members}
+                  selectedId={selectedRivalId}
+                  onSelect={setSelectedRivalId}
+                  excludeId={selectedSecondUserId ?? ''}
+                />
+              )}
+              <Text variant="titleSmall" style={[styles.sectionTitle, { marginTop: 8 }]}>Jugador 2</Text>
+              {!groupData ? <ActivityIndicator style={{ marginTop: 8 }} /> : (
+                <RivalPicker
+                  members={groupData.members}
+                  selectedId={selectedSecondUserId}
+                  onSelect={setSelectedSecondUserId}
+                  excludeId={selectedRivalId ?? ''}
+                />
+              )}
+              <Divider style={styles.divider} />
+            </>
+          )}
+
           {/* Rival picker */}
           {needsRival && (
             <>
               <Text variant="titleSmall" style={styles.sectionTitle}>
-                {card === 'la_aficion' ? 'Apoya a...' : card === 'el_var' ? 'Rival a corregir' : 'Rival objetivo'}
+                {card === 'la_aficion' ? 'Apoya a...' : card === 'el_var' ? 'Rival a corregir' : card === 'reto' ? 'Reta a...' : 'Rival objetivo'}
               </Text>
               {!groupData ? <ActivityIndicator style={{ marginTop: 8 }} /> : (
                 <RivalPicker
@@ -404,6 +563,7 @@ const styles = StyleSheet.create({
   container: { padding: 16, gap: 12, paddingBottom: 40 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   cardSurface: { borderRadius: 16, padding: 20, alignItems: 'center', gap: 6 },
+  retoSurface: { borderRadius: 16, padding: 16, alignItems: 'center', gap: 10 },
   lockedSurface: { opacity: 0.85 },
   cardEmoji: { fontSize: 48 },
   cardName: { fontWeight: '700', textAlign: 'center' },
