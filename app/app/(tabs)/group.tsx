@@ -52,8 +52,10 @@ export default function GroupTab() {
     ].sort((a, b) => a - b);
   }, [matches]);
 
-  // Jornada "actual": la del partido en curso ahora mismo, o si no la última ya jugada, o
-  // si no la ha habido ninguna todavía la próxima por empezar (inicio de temporada).
+  // Jornada "actual": la del partido en curso ahora mismo; si no, la próxima por empezar
+  // (aunque la última ya haya terminado del todo, para no quedarse anclado en ella
+  // mientras la siguiente ya tiene cartas repartidas y espera a que empiece); si no queda
+  // ninguna por delante (fin de temporada), la última ya jugada.
   const currentMatchday = useMemo(() => {
     if (!matches) return null;
     const laLiga = matches.filter((m) => m.competition === 'la_liga' && m.matchday != null);
@@ -62,11 +64,11 @@ export default function GroupTab() {
     const live = laLiga.find((m) => m.status !== 'finished' && m.status !== 'postponed' && new Date(m.startTime) <= now);
     if (live) return live.matchday!;
     const sorted = [...laLiga].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    const upcoming = sorted.find((m) => m.status !== 'finished' && m.status !== 'postponed' && new Date(m.startTime) > now);
+    if (upcoming) return upcoming.matchday!;
     for (let i = sorted.length - 1; i >= 0; i--) {
       if (sorted[i].status === 'finished') return sorted[i].matchday!;
     }
-    const upcoming = sorted.find((m) => new Date(m.startTime) > now);
-    if (upcoming) return upcoming.matchday!;
     return sorted[sorted.length - 1].matchday ?? null;
   }, [matches]);
 
