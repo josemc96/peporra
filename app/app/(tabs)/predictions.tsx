@@ -412,6 +412,27 @@ export default function PredictionsTab() {
     return null;
   }, [sortedLaLigaMatches, sections]);
 
+  // Jornada "activa" para el banner de cartas — a propósito INDEPENDIENTE de a dónde hace
+  // scroll la lista (initialScrollTarget arriba): aquí sí se prioriza la próxima jornada por
+  // empezar sobre la última ya terminada, para que la carta recién repartida aparezca antes
+  // de que arranque el primer partido, sin tener que navegar manualmente hasta su jornada.
+  const activeCardsMatchday = useMemo(() => {
+    if (sortedLaLigaMatches.length === 0) return null;
+    const now = new Date();
+    const live = sortedLaLigaMatches.find(
+      (m) => m.status !== 'finished' && m.status !== 'postponed' && new Date(m.startTime) <= now
+    );
+    if (live) return live.matchday ?? null;
+    const upcoming = sortedLaLigaMatches.find(
+      (m) => m.status !== 'finished' && m.status !== 'postponed' && new Date(m.startTime) > now
+    );
+    if (upcoming) return upcoming.matchday ?? null;
+    for (let i = sortedLaLigaMatches.length - 1; i >= 0; i--) {
+      if (sortedLaLigaMatches[i].status === 'finished') return sortedLaLigaMatches[i].matchday ?? null;
+    }
+    return sortedLaLigaMatches[sortedLaLigaMatches.length - 1].matchday ?? null;
+  }, [sortedLaLigaMatches]);
+
   // Cuántos elementos hay que renderizar de entrada para que el partido objetivo ya esté
   // medido en el primer render — sin esto, scrollToLocation falla en listas largas (a medida
   // que avanza la temporada, el partido "actual" queda cada vez más lejos del principio) y
@@ -426,11 +447,9 @@ export default function PredictionsTab() {
     return Math.min(count + 20, 200);
   }, [initialScrollTarget, sections]);
 
-  // Jornada "activa" para el banner de cartas: la filtrada si hay filtro, si no la del
-  // partido más cercano/en curso (la misma a la que hace scroll el modo "Todos").
-  const activeMatchday = filterMatchday ?? (
-    initialScrollTarget ? sections[initialScrollTarget.sectionIndex]?.matchday ?? null : null
-  );
+  // Jornada "activa" para el banner de cartas: la filtrada si hay filtro, si no
+  // activeCardsMatchday (ver arriba) — independiente del scroll de la lista.
+  const activeMatchday = filterMatchday ?? activeCardsMatchday;
 
   const { data: myDeal } = useQuery({
     queryKey: ['my-deal', groupId, season, activeMatchday],
