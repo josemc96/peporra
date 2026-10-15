@@ -20,16 +20,25 @@ function toSeasonStartYear(season: string): string {
 // "finished" (a mano o por sync previo) si football-data.org va con retraso reflejando el
 // resultado. "postponed" refleja un aplazamiento ANTES del kickoff (la API aún no tiene la
 // nueva fecha) — se recupera a "pending" en cuanto la API vuelve a dar una fecha confirmada
-// (SCHEDULED/TIMED). El resto de estados (IN_PLAY/PAUSED/SUSPENDED/CANCELLED) no tienen
-// mapeo propio todavía: se dejan `undefined` (sin tocar) — un partido suspendido a mitad de
-// juego, por ejemplo, ya queda bloqueado igualmente porque su `startTime` real ya pasó.
+// (SCHEDULED/TIMED). CANCELLED se trata igual que POSTPONED: confirmado contra la API real
+// que football-data.org lo usa también para partidos aplazados sin nueva fecha todavía (no
+// solo para cancelaciones definitivas). Ojo: la API manda un marcador placeholder (0-0) para
+// estos partidos y seguimos guardándolo tal cual en `homeScore`/`awayScore` — no afecta a la
+// UI (un partido `postponed` nunca se pinta como en juego ni puntúa), pero queda como dato
+// sucio en la BD; si se quiere limpiar de raíz, habría que dejar de fiarse del marcador salvo
+// cuando `apiStatus === 'FINISHED'`.
+// IN_PLAY/PAUSED se dejan sin mapeo propio (quedan como estaban, normalmente "pending" con
+// el partido ya empezado) — es justo lo que queremos: un partido en juego debe seguir
+// tratándose como bloqueado/en vivo, no como editable. SUSPENDED igual: ya empezó de verdad
+// (puede que con goles ya marcados), así que no debe reabrir las predicciones aunque se
+// interrumpa — distinto de un aplazamiento ANTES del kickoff.
 function toMatchStatus(
   apiStatus: FootballDataMatch['status'],
   existingStatus: MatchStatus | undefined
 ): MatchStatus | undefined {
   if (existingStatus === 'finished' && apiStatus !== 'FINISHED') return undefined;
   if (apiStatus === 'FINISHED') return 'finished';
-  if (apiStatus === 'POSTPONED') return 'postponed';
+  if (apiStatus === 'POSTPONED' || apiStatus === 'CANCELLED') return 'postponed';
   if (apiStatus === 'SCHEDULED' || apiStatus === 'TIMED') return 'pending';
   return undefined;
 }
