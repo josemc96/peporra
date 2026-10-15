@@ -34,9 +34,13 @@ export async function upsertPrediction(req: Request, res: Response): Promise<voi
   if (!match) {
     throw new AppError('Partido no encontrado', 404);
   }
-  // Aplazado antes del kickoff: aunque su startTime antiguo ya haya pasado, sigue siendo
-  // editable hasta que se confirme la nueva fecha (el sync lo pasa a "pending" entonces).
-  if (match.status !== 'postponed' && new Date() >= match.startTime) {
+  // Bloqueo por startTime, sin excepción para "postponed": en la práctica, un partido
+  // aplazado/cancelado se queda con el startTime ORIGINAL (ya pasado) hasta que se confirma
+  // una fecha nueva — momento en el que el sync lo devuelve a "pending" con el startTime ya
+  // actualizado a futuro, y entonces sí vuelve a ser editable de forma natural. Permitir
+  // editar mientras sigue "postponed" con fecha antigua reabriría la predicción de un
+  // partido cuya jornada ya ha arrancado o incluso terminado — ventaja injusta.
+  if (new Date() >= match.startTime) {
     throw new AppError('Ya no se puede predecir este partido, ya ha empezado', 409);
   }
 

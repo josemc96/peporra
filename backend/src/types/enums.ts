@@ -1,7 +1,11 @@
 export type UserRole = 'user' | 'admin';
 
-// 'postponed': football-data.org lo marcó POSTPONED antes del kickoff (aún no se sabe
-// cuándo se juega de verdad) — se trata como editable, no como "ya empezado".
+// 'postponed': football-data.org lo marcó POSTPONED o CANCELLED (aún no se sabe cuándo se
+// juega de verdad) — solo afecta a cómo se MUESTRA (nunca "en vivo", nunca se puntúa).
+// El bloqueo de predicciones sigue dependiendo únicamente de `startTime`: mientras el
+// partido siga "postponed" con la fecha antigua, se mantiene BLOQUEADO (no editable) — en
+// cuanto la API confirme fecha nueva, el sync lo devuelve a 'pending' con el startTime ya
+// actualizado a futuro, y ahí sí vuelve a ser editable de forma natural.
 export type MatchStatus = 'pending' | 'finished' | 'postponed';
 
 export type PredictionStatus = 'pending' | 'scored';
