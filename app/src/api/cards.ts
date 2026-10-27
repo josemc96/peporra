@@ -61,11 +61,11 @@ export const CARD_DESCRIPTIONS: Record<CardKey, string> = {
   el_doblete: 'Doblas tus puntos base en un partido.',
   me_la_juego: 'Apuesta X puntos en un partido: si aciertas resultado exacto ganas X, si no pierdes X/2.',
   mimo: 'Eliges a un rival a ciegas (sin saber qué carta tiene) y copias su carta.',
-  dupla: 'Eliges a 2 jugadores (pueden ser 2 rivales): al acabar la jornada, ambos quedan con la media de sus puntos.',
+  dupla: 'Eliges a 2 jugadores (pueden ser 2 rivales): al acabar la jornada, ambos quedan con la media de sus puntos (redondeada a la unidad). Si alguno coincide con otra Dupla de esa jornada, se encadenan y todos los implicados quedan con la media del grupo completo.',
   espejo: 'En un partido tuyo: si te atacan con La Roja, La Lesión o La Mina, no te afecta y el golpe se devuelve a quien lo usó (si tenía predicción ahí). A diferencia de El Autobús, no garantiza mínimo 1 punto.',
   comodin: 'En un partido tuyo: el resultado que predigas también vale al revés para el resultado exacto (ej. 2-1 también cuenta si el real es 1-2).',
   borracho: 'Emborrachas a un rival en un partido: su predicción se invierte (2-1 pasa a 1-2). Si tiene Autobús puesto ahí, no le afecta. Si tiene Espejo, no le afecta y te invierte a ti la tuya en ese partido.',
-  reto: 'Retas a un rival a ver quién queda mejor en la jornada (debe aceptarlo antes de que empiece): si ganas le quitas 4 puntos, si pierdes te los quita él. Si rechaza o no responde a tiempo, pierde 2 puntos sin dártelos a ti.',
+  reto: 'Retas a un rival a ver quién queda mejor en la jornada, jugándote entre 2 y 4 puntos (tú eliges). No es optativo para él — en cuanto juegas la carta, el reto queda en marcha. Al terminar la jornada, quien tenga más puntos le quita al otro la cantidad elegida (empate = nadie gana nada).',
 };
 
 export type CardDealStatus = 'locked' | 'pending' | 'played' | 'expired';
@@ -98,7 +98,7 @@ export interface CardPlay {
   deal: string;
   targetUser?: string;
   targetMatch?: string;
-  params: { amount?: number; copiedUserId?: string; secondUserId?: string; retoAccepted?: boolean };
+  params: { amount?: number; copiedUserId?: string; secondUserId?: string };
   playedAt: string;
 }
 
@@ -110,13 +110,8 @@ export interface ActiveCardPlay {
   };
   targetUser?: { _id: string; alias: string };
   targetMatch?: { _id: string; homeTeam: string; awayTeam: string; startTime: string; matchday: number };
-  params: { amount?: number; copiedUserId?: string; secondUserId?: string; retoAccepted?: boolean };
+  params: { amount?: number; copiedUserId?: string; secondUserId?: string };
   playedAt: string;
-}
-
-export interface PendingReto {
-  playId: string;
-  challenger: { _id: string; alias: string };
 }
 
 const base = (groupId: string) => `/groups/${groupId}/cards`;
@@ -156,12 +151,6 @@ export const cardsApi = {
 
   revealMimic: (groupId: string, dealId: string, targetUserId: string): Promise<{ deal: CardDeal }> =>
     apiFetch(`${base(groupId)}/mimic`, json({ dealId, targetUserId })),
-
-  getPendingRetos: (groupId: string, season: string, matchday: number): Promise<{ pending: PendingReto[] }> =>
-    apiFetch(`${base(groupId)}/reto/pending?season=${encodeURIComponent(season)}&matchday=${matchday}`),
-
-  respondToReto: (groupId: string, playId: string, accept: boolean): Promise<{ play: CardPlay }> =>
-    apiFetch(`${base(groupId)}/reto/respond`, json({ playId, accept })),
 
   playCard: (groupId: string, body: {
     dealId: string;

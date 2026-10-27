@@ -4,6 +4,9 @@
  * Termina la jornada falsa J99 y calcula puntos con todos los efectos de cartas.
  * Ejecutar MAÑANA: npm run finish:mock-cards
  *
+ * Usa la misma temporada de prueba dedicada que seedMockCards.ts (`SEASON`, aislada de la
+ * real) — ver el docblock de ese archivo para el porqué.
+ *
  * Lo que hace:
  *  1. Pone los 5 partidos de J99 como 'finished' con resultados reales
  *  2. Juega el_var de FakeVar: sabotea la predicción de FakeRoja en M1 (1-0 → 2-0)
@@ -27,7 +30,8 @@ import { PredictionScore } from '../models/PredictionScore';
 import { CardEffect } from '../models/CardEffect';
 import { calculateScores } from '../jobs/calculateScores.job';
 
-const SEASON = '2026-2027';
+// Debe coincidir exactamente con la de seedMockCards.ts — nunca usar `env.currentSeason`.
+const SEASON = '2026-2027-MOCK';
 const MATCHDAY = 99;
 const GROUP_NAME = 'Peña Mock Cartas';
 
@@ -189,10 +193,8 @@ async function main() {
   log('  🃏 comodin (FakeComodin, M1=1-0): predijo 0-1 (revés) → cuenta como exacto, 4pts');
   log('  🍺 borracho (FakeBorracho→FakeEspejo, M0): espejo activo → reflejo invierte la propia');
   log('     predicción de FakeBorracho en M0 (1-2→2-1) → pasa a ser exacta');
-  log('  ⚔️  reto (FakeReto→FakeMela, aceptado): FakeReto acierta las 5 → gana +4 (cuenta en la');
-  log('     jornada), FakeMela -4');
-  log('  ⚔️  reto (FakeRetoReject→FakeVar, sin responder): FakeVar -2 pts (cuenta en la jornada,');
-  log('     sin dárselos a FakeRetoReject)');
+  log('  ⚔️  reto (FakeReto→FakeMela, 4 pts): FakeReto acierta las 5 → gana (+4 FakeReto, -4 FakeMela)');
+  log('  ⚔️  reto (FakeReto2→FakeVar, 2 pts): se resuelve comparando puntos de jornada');
   log('═══════════════════════════════════════════════════════════════');
 
   await mongoose.disconnect();

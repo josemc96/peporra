@@ -13,7 +13,7 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { cardsApi, CardKey, CARD_LABELS, CARD_DESCRIPTIONS, CARD_EMOJI, CardDeal, PendingReto } from '@/api/cards';
+import { cardsApi, CardKey, CARD_LABELS, CARD_DESCRIPTIONS, CARD_EMOJI, CardDeal } from '@/api/cards';
 import { predictionsApi, Match } from '@/api/predictions';
 import { groupsApi, GroupMember } from '@/api/groups';
 import { ApiError } from '@/api/client';
@@ -84,47 +84,6 @@ function RivalPicker({
   );
 }
 
-// ── Pending Reto: banner para responder a un desafío recibido ──────────────────
-
-function PendingRetoCard({
-  groupId,
-  pending,
-  onResponded,
-}: {
-  groupId: string;
-  pending: PendingReto;
-  onResponded: () => void;
-}) {
-  const theme = useTheme();
-  const [error, setError] = useState<string | null>(null);
-
-  const { mutate: respond, isPending } = useMutation({
-    mutationFn: (accept: boolean) => cardsApi.respondToReto(groupId, pending.playId, accept),
-    onSuccess: onResponded,
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Error al responder'),
-  });
-
-  return (
-    <Surface style={styles.retoSurface} elevation={2}>
-      <Text style={{ fontSize: 28 }}>⚔️</Text>
-      <Text variant="bodyMedium" style={{ textAlign: 'center' }}>
-        <Text style={{ fontWeight: '700' }}>{pending.challenger.alias}</Text> te ha retado a ver
-        quién queda mejor esta jornada. Si ganas le quitas 4 pts, si pierdes te los quita él.
-        Si rechazas (o no respondes antes de que empiece la jornada), pierdes 2 pts.
-      </Text>
-      {error && <Text variant="bodySmall" style={{ color: theme.colors.error }}>{error}</Text>}
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Button mode="contained" onPress={() => { setError(null); respond(true); }} loading={isPending} disabled={isPending}>
-          Aceptar
-        </Button>
-        <Button mode="outlined" onPress={() => { setError(null); respond(false); }} loading={isPending} disabled={isPending}>
-          Rechazar
-        </Button>
-      </View>
-    </Surface>
-  );
-}
-
 // ── Main screen ─────────────────────────────────────────────────────────────
 
 export default function CardPlayScreen() {
@@ -141,6 +100,7 @@ export default function CardPlayScreen() {
   const [selectedRivalId, setSelectedRivalId] = useState<string | null>(null);
   const [selectedSecondUserId, setSelectedSecondUserId] = useState<string | null>(null);
   const [betAmount, setBetAmount] = useState('');
+  const [retoAmount, setRetoAmount] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -151,15 +111,6 @@ export default function CardPlayScreen() {
     queryFn: () => cardsApi.getMyDeal(groupId, season, matchdayNum),
     enabled: !!groupId && !!season && !!matchday,
   });
-
-  // Retos pendientes de respuesta contra mí — independiente de qué carta tenga yo esta
-  // jornada (puede que no tenga carta de Reto, o incluso ninguna carta).
-  const { data: pendingRetosData } = useQuery({
-    queryKey: ['pending-retos', groupId, season, matchday],
-    queryFn: () => cardsApi.getPendingRetos(groupId, season, matchdayNum),
-    enabled: !!groupId && !!season && !!matchday,
-  });
-  const pendingRetos = pendingRetosData?.pending ?? [];
 
   const deal = dealData?.deal ?? null;
   const card = deal?.card ?? null;
@@ -238,6 +189,7 @@ export default function CardPlayScreen() {
 
       if (card === 'me_la_juego') body.params = { amount: parseInt(betAmount, 10) };
       if (card === 'dupla' && selectedSecondUserId) body.params = { secondUserId: selectedSecondUserId };
+      if (card === 'reto' && retoAmount != null) body.params = { amount: retoAmount };
 
       return cardsApi.playCard(groupId, body);
     },
@@ -267,6 +219,7 @@ export default function CardPlayScreen() {
     if (card === 'dupla') {
       return !!selectedRivalId && !!selectedSecondUserId && selectedRivalId !== selectedSecondUserId;
     }
+    if (card === 'reto') return !!selectedRivalId && retoAmount != null;
     return true;
   }
 
@@ -285,23 +238,9 @@ export default function CardPlayScreen() {
     );
   }
 
-  const pendingRetosBanner = pendingRetos.length > 0 && (
-    <View style={{ gap: 12 }}>
-      {pendingRetos.map((p) => (
-        <PendingRetoCard
-          key={p.playId}
-          groupId={groupId}
-          pending={p}
-          onResponded={() => qc.invalidateQueries({ queryKey: ['pending-retos', groupId, season, matchday] })}
-        />
-      ))}
-    </View>
-  );
-
   if (!deal) {
     return (
       <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-        {pendingRetosBanner}
         <View style={styles.centered}>
           <Text variant="bodyLarge" style={{ opacity: 0.5 }}>
             Sin carta en J{matchdayNum}
@@ -330,8 +269,6 @@ export default function CardPlayScreen() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.container}>
-      {pendingRetosBanner}
-
       {/* ── Card display ── */}
       {deal.status === 'locked' ? (
         <Surface style={[styles.cardSurface, styles.lockedSurface]} elevation={3}>
@@ -480,6 +417,27 @@ export default function CardPlayScreen() {
             </>
           )}
 
+          {/* Reto: cuánto te juegas (no es optativo para el rival — en cuanto se juega la
+              carta, el reto queda en marcha) */}
+          {card === 'reto' && (
+            <>
+              <Text variant="titleSmall" style={styles.sectionTitle}>¿Cuánto te juegas?</Text>
+              <View style={styles.retoAmountRow}>
+                {[2, 3, 4].map((n) => (
+                  <Button
+                    key={n}
+                    mode={retoAmount === n ? 'contained' : 'outlined'}
+                    onPress={() => setRetoAmount(n)}
+                    style={styles.retoAmountBtn}
+                  >
+                    {n} pts
+                  </Button>
+                ))}
+              </View>
+              <Divider style={styles.divider} />
+            </>
+          )}
+
           {/* Match picker */}
           {needsMatch && (
             <>
@@ -563,7 +521,8 @@ const styles = StyleSheet.create({
   container: { padding: 16, gap: 12, paddingBottom: 40 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   cardSurface: { borderRadius: 16, padding: 20, alignItems: 'center', gap: 6 },
-  retoSurface: { borderRadius: 16, padding: 16, alignItems: 'center', gap: 10 },
+  retoAmountRow: { flexDirection: 'row', gap: 8 },
+  retoAmountBtn: { flex: 1 },
   lockedSurface: { opacity: 0.85 },
   cardEmoji: { fontSize: 48 },
   cardName: { fontWeight: '700', textAlign: 'center' },

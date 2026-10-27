@@ -34,7 +34,7 @@ interface DuplaPlay {
 interface RetoPlay {
   challengerId: string;
   targetId: string;
-  accepted?: boolean;
+  amount: number;
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -127,11 +127,11 @@ async function loadMatchdayCardPlays(
         }
         break;
       case 'reto':
-        if (play.targetUser) {
+        if (play.targetUser && play.params?.amount != null) {
           retoPlays.push({
             challengerId: userId,
             targetId: play.targetUser.toString(),
-            accepted: play.params?.retoAccepted,
+            amount: play.params.amount as number,
           });
         }
         break;
@@ -360,71 +360,91 @@ async function processDupla(
   const matchdayPoints = await computeMatchdayPredictionPoints(groupId, season, matchday, memberIds);
   if (!matchdayPoints) return;
 
-  for (const { userA, userB } of duplaPlays) {
-    const pointsA = matchdayPoints.get(userA) ?? 0;
-    const pointsB = matchdayPoints.get(userB) ?? 0;
-    const average = (pointsA + pointsB) / 2;
+  // Si una misma persona cae en varias parejas de Dupla esa jornada (jugadas por usuarios
+  // distintos), se encadenan en un único grupo ampliado en vez de pisarse entre sí: todos
+  // los implicados en la cadena acaban con la media del grupo completo, no solo de su
+  // pareja original. Una pareja normal, sin solapamientos, sigue siendo un grupo de 2 — el
+  // mismo cálculo de antes.
+  const adjacency = new Map<string, Set<string>>();
+  function addEdge(a: string, b: string) {
+    if (!adjacency.has(a)) adjacency.set(a, new Set());
+    if (!adjacency.has(b)) adjacency.set(b, new Set());
+    adjacency.get(a)!.add(b);
+    adjacency.get(b)!.add(a);
+  }
+  for (const { userA, userB } of duplaPlays) addEdge(userA, userB);
 
-    await CardEffect.findOneAndUpdate(
-      { group: groupId, season, matchday, user: userA, card: 'dupla' },
-      { group: groupId, season, matchday, user: new Types.ObjectId(userA), card: 'dupla', points: average - pointsA },
-      { upsert: true }
-    );
-    await CardEffect.findOneAndUpdate(
-      { group: groupId, season, matchday, user: userB, card: 'dupla' },
-      { group: groupId, season, matchday, user: new Types.ObjectId(userB), card: 'dupla', points: average - pointsB },
-      { upsert: true }
-    );
+  const visited = new Set<string>();
+  const groups: string[][] = [];
+  for (const user of adjacency.keys()) {
+    if (visited.has(user)) continue;
+    const component: string[] = [];
+    const stack = [user];
+    visited.add(user);
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      component.push(current);
+      for (const neighbor of adjacency.get(current) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          stack.push(neighbor);
+        }
+      }
+    }
+    groups.push(component);
+  }
+
+  for (const groupUsers of groups) {
+    const total = groupUsers.reduce((sum, uid) => sum + (matchdayPoints.get(uid) ?? 0), 0);
+    // Redondeo a unidades: por debajo de ",5" redondea al entero menor, de ",5" en adelante
+    // al mayor (comportamiento estándar de Math.round). Si no, una división no exacta
+    // (ej. entre 3) deja la media con ruido de punto flotante tipo 5.666666666666667 — la UI
+    // imprime `points` tal cual, sin formatear, así que se vería literalmente en el ranking.
+    const average = Math.round(total / groupUsers.length);
+
+    for (const uid of groupUsers) {
+      const basePoints = matchdayPoints.get(uid) ?? 0;
+      const delta = Math.round((average - basePoints) * 100) / 100;
+      await CardEffect.findOneAndUpdate(
+        { group: groupId, season, matchday, user: uid, card: 'dupla' },
+        { group: groupId, season, matchday, user: new Types.ObjectId(uid), card: 'dupla', points: delta },
+        { upsert: true }
+      );
+    }
   }
 }
 
 // ── Reto resolution ───────────────────────────────────────────────────────────
-// Dos fases, cada una con su propio disparador:
-//  1. En cuanto empieza la jornada: retos sin aceptar (rechazados o sin respuesta) hacen
-//     que el retado pierda 2 pts, sin dárselos al retador.
-//  2. Cuando la jornada termina del todo: retos aceptados comparan puntos de jornada —
-//     quien tenga más le quita 4 al otro (empate = nadie gana nada).
-// Cuenta como puntuación normal de esa jornada (ranking de jornada Y deuda/bote, ver
-// applyMatchdayPenalties.job.ts) — para cuando se reparte la penalización, la jornada ya
-// ha terminado del todo y ambas fases de Reto (incluida la de rechazo, disparada antes,
-// en el kickoff) ya están resueltas. Se recalcula el total absoluto de cada usuario en
-// cada pasada (no se incrementa) para que rerun sea idempotente.
+// No es optativo para el retado (no hay aceptar/rechazar): en cuanto se juega la carta el
+// reto queda en marcha. Se resuelve cuando la jornada termina del todo, comparando puntos
+// de jornada — quien tenga más le quita al otro la cantidad que eligió el retador al jugar
+// la carta (entre 2 y 4 pts). Empate = nadie le quita puntos a nadie. Cuenta como
+// puntuación normal de esa jornada (ranking de jornada Y deuda/bote, ver
+// applyMatchdayPenalties.job.ts). Se recalcula el total absoluto de cada usuario en cada
+// pasada (no se incrementa) para que rerun sea idempotente.
 
 async function processReto(
   groupId: Types.ObjectId,
   season: string,
   matchday: number,
   memberIds: string[],
-  retoPlays: RetoPlay[],
-  matchdayStarted: boolean,
-  matchdayComplete: boolean
+  retoPlays: RetoPlay[]
 ): Promise<void> {
   if (retoPlays.length === 0) return;
 
   const totals = new Map<string, number>();
   const addPoints = (userId: string, delta: number) => totals.set(userId, (totals.get(userId) ?? 0) + delta);
 
-  const acceptedPlays: RetoPlay[] = [];
-  for (const play of retoPlays) {
-    if (play.accepted === true) {
-      acceptedPlays.push(play);
-    } else if (matchdayStarted) {
-      addPoints(play.targetId, -2);
-    }
-  }
-
-  if (acceptedPlays.length > 0 && matchdayComplete) {
-    const matchdayPoints = await computeMatchdayPredictionPoints(groupId, season, matchday, memberIds);
-    if (matchdayPoints) {
-      for (const { challengerId, targetId } of acceptedPlays) {
-        const challengerPts = matchdayPoints.get(challengerId) ?? 0;
-        const targetPts = matchdayPoints.get(targetId) ?? 0;
-        if (challengerPts === targetPts) continue; // empate: nadie le quita puntos a nadie
-        const winnerId = challengerPts > targetPts ? challengerId : targetId;
-        const loserId = winnerId === challengerId ? targetId : challengerId;
-        addPoints(winnerId, 4);
-        addPoints(loserId, -4);
-      }
+  const matchdayPoints = await computeMatchdayPredictionPoints(groupId, season, matchday, memberIds);
+  if (matchdayPoints) {
+    for (const { challengerId, targetId, amount } of retoPlays) {
+      const challengerPts = matchdayPoints.get(challengerId) ?? 0;
+      const targetPts = matchdayPoints.get(targetId) ?? 0;
+      if (challengerPts === targetPts) continue; // empate: nadie le quita puntos a nadie
+      const winnerId = challengerPts > targetPts ? challengerId : targetId;
+      const loserId = winnerId === challengerId ? targetId : challengerId;
+      addPoints(winnerId, amount);
+      addPoints(loserId, -amount);
     }
   }
 
@@ -448,20 +468,16 @@ export async function applyCardEffects(season: string): Promise<{ matchdaysProce
     if (!config || config.enabledCards.length === 0) continue;
 
     const allMatchdays = await Match.find({ competition: 'la_liga', season, matchday: { $ne: null } })
-      .select('matchday status startTime');
+      .select('matchday status');
 
     // Build matchday status map
     const matchdayStatus = new Map<number, { total: number; finished: number }>();
-    const matchdayEarliestStart = new Map<number, Date>();
     for (const m of allMatchdays) {
       const day = m.matchday!;
       const entry = matchdayStatus.get(day) ?? { total: 0, finished: 0 };
       entry.total++;
       if (m.status === 'finished') entry.finished++;
       matchdayStatus.set(day, entry);
-
-      const cur = matchdayEarliestStart.get(day);
-      if (!cur || m.startTime < cur) matchdayEarliestStart.set(day, m.startTime);
     }
 
     // Matchdays with at least one finished match (for match-level cards)
@@ -469,27 +485,15 @@ export async function applyCardEffects(season: string): Promise<{ matchdaysProce
       .filter(([, s]) => s.finished > 0)
       .map(([day]) => day);
 
-    // Matchdays fully finished (required for La Afición/Dupla, que necesitan el ranking
-    // de jornada completo, y para la fase de "gana/pierde" de Reto)
+    // Matchdays fully finished (requerido para La Afición/Dupla/Reto, que necesitan el
+    // ranking de jornada ya completo)
     const completedMatchdays = new Set(
       [...matchdayStatus.entries()]
         .filter(([, s]) => s.total > 0 && s.total === s.finished)
         .map(([day]) => day)
     );
 
-    // Matchdays ya empezadas (kickoff del primer partido ya pasado) — Reto necesita
-    // detectar esto ANTES de que termine ningún partido, para penalizar los retos sin
-    // aceptar en cuanto arranca la jornada, no cuando el primer partido termina.
-    const now = new Date();
-    const matchdaysStarted = new Set(
-      [...matchdayEarliestStart.entries()]
-        .filter(([, start]) => now >= start)
-        .map(([day]) => day)
-    );
-
-    const matchdaysToProcess = [...new Set([...matchdaysWithFinished, ...matchdaysStarted])];
-
-    for (const matchday of matchdaysToProcess) {
+    for (const matchday of matchdaysWithFinished) {
       const matches = await Match.find({ competition: 'la_liga', season, matchday, status: 'finished' });
       const { matchEffects, aficionPlays, duplaPlays, retoPlays } = await loadMatchdayCardPlays(group._id as Types.ObjectId, season, matchday);
 
@@ -504,21 +508,15 @@ export async function applyCardEffects(season: string): Promise<{ matchdaysProce
       const allMelaJuego = [...matchEffects.values()].flatMap((e) => e.melaJuegoPlays);
       await processMelaJuego(group._id as Types.ObjectId, season, matchday, matches, allMelaJuego);
 
-      // La Afición y Dupla necesitan el ranking de jornada ya completo (post-efectos), así
-      // que solo se resuelven cuando la jornada ha terminado del todo.
+      // La Afición, Dupla y Reto necesitan el ranking de jornada ya completo (post-efectos),
+      // así que solo se resuelven cuando la jornada ha terminado del todo.
       const memberIds = group.members.map((m) => m.toString());
       if (completedMatchdays.has(matchday)) {
         await processLaAficion(group._id as Types.ObjectId, season, matchday, memberIds, aficionPlays);
         await processDupla(group._id as Types.ObjectId, season, matchday, memberIds, duplaPlays);
+        await processReto(group._id as Types.ObjectId, season, matchday, memberIds, retoPlays);
         matchdaysProcessed++;
       }
-
-      // Reto tiene sus dos fases gestionadas dentro de processReto (timeout en cuanto
-      // empieza, gana/pierde cuando termina) — se llama siempre que haya jugadas de reto.
-      await processReto(
-        group._id as Types.ObjectId, season, matchday, memberIds, retoPlays,
-        matchdaysStarted.has(matchday), completedMatchdays.has(matchday)
-      );
     }
   }
 
