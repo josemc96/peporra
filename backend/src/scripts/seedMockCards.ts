@@ -4,10 +4,18 @@
  * Crea una jornada falsa (J99) que empieza en ~1 hora para testear el sistema de cartas.
  * Ejecutar: npm run seed:mock-cards
  *
+ * Aislamiento: usa una temporada de prueba dedicada (`SEASON`, ej. "2026-2027-MOCK"),
+ * DISTINTA de la temporada real (`env.currentSeason`). Esto es crítico, no cosmético: el
+ * cron (`dealCards.job.ts`) reparte cartas comparando `match.season === group.season`, y
+ * `applyMatchdayPenalties.job.ts` calcula deuda por cada `PenaltyConfig.season` — si esta
+ * temporada de mock coincidiera con la real, el cron automático repartiría cartas y
+ * calcularía deuda falsa también en las peñas reales (ya pasó dos veces). Con una temporada
+ * propia, ninguna peña real la ve nunca, sin tener que acordarse de limpiar nada a mano.
+ *
  * Lo que crea:
  *  - 17 usuarios falsos (fake_*.cards@test.com)
- *  - Un grupo "Peña Mock Cartas" con el usuario real como admin y todos los falsos como miembros
- *    (jornada 99, que no existe en el calendario real — no afecta a ninguna peña ni usuario real)
+ *  - Un grupo "Peña Mock Cartas" con el usuario real como admin y todos los falsos como
+ *    miembros, en la temporada de prueba (jornada 99, que tampoco existe en el calendario real)
  *  - 5 partidos de La Liga J99 que empiezan en ~1 hora
  *  - Predicciones para todos los usuarios
  *  - GroupRuleSettings con exact_score y correct_sign activos
@@ -37,7 +45,9 @@ import { ALL_CARD_KEYS, CardKey } from '../types/enums';
 // ── Config ─────────────────────────────────────────────────────────────────
 
 const REAL_USER_EMAIL = 'pepe@pepe.com';
-const SEASON = '2026-2027';
+// Temporada de prueba DEDICADA, aislada de la real (ver docblock arriba) — nunca usar
+// `env.currentSeason` ni copiar su valor aquí.
+const SEASON = '2026-2027-MOCK';
 const MATCHDAY = 99;
 const GROUP_NAME = 'Peña Mock Cartas';
 const PASSWORD = 'test1234';
@@ -68,7 +78,7 @@ const FAKE_USERS: Array<{ alias: string; email: string; card: CardKey }> = [
   { alias: 'FakeComodin',     email: 'fake.comodin.cards@test.com',     card: 'comodin'  },
   { alias: 'FakeBorracho',    email: 'fake.borracho.cards@test.com',    card: 'borracho' },
   { alias: 'FakeReto',        email: 'fake.reto.cards@test.com',        card: 'reto'     },
-  { alias: 'FakeRetoReject',  email: 'fake.retoreject.cards@test.com',  card: 'reto'     },
+  { alias: 'FakeReto2',       email: 'fake.reto2.cards@test.com',       card: 'reto'     },
 ];
 
 // El usuario real recibe un el_doblete de regalo para jugar hoy
@@ -92,8 +102,8 @@ const PREDICTIONS: Record<string, Array<[number, number]>> = {
   FakeEspejo:     [[2,1], [1,0], [1,1], [1,1], [1,1]],  // M0 exacto — protegido, ataque de FakeBorracho se refleja
   FakeComodin:    [[1,0], [0,1], [1,1], [1,1], [1,1]],  // M1: 0-1 es el revés del 1-0 real → comodín lo cubre
   FakeBorracho:   [[1,2], [1,0], [1,1], [1,1], [1,1]],  // M0: ataca a FakeEspejo → reflejo le invierte 1-2→2-1 (¡acierta!)
-  FakeReto:       [[2,1], [1,0], [2,2], [1,1], [1,1]],  // acierta las 5 → gana el reto a FakeMela
-  FakeRetoReject: [[1,1], [1,1], [1,1], [1,1], [1,1]],  // reta a FakeVar, que nunca responde
+  FakeReto:       [[2,1], [1,0], [2,2], [1,1], [1,1]],  // acierta las 5 → gana el reto a FakeMela (4 pts)
+  FakeReto2:      [[1,1], [1,1], [1,1], [1,1], [1,1]],  // reta a FakeVar por 2 pts
 };
 // Real user: juega hoy su el_doblete en el partido que quiera
 const REAL_USER_PREDS: Array<[number, number]> = [[1,0], [1,0], [2,2], [1,1], [1,1]];
@@ -324,21 +334,13 @@ async function main() {
   // (1-2 → se invierte a 2-1, ¡que es justo el resultado real!)
   await play('FakeBorracho', { targetUser: aliasToId('FakeEspejo'), targetMatch: m0, params: {} });
 
-  // reto (aceptado) → FakeReto reta a FakeMela por toda la jornada. FakeMela acepta (se
-  // simula la respuesta, equivalente a POST /cards/:groupId/reto/respond). FakeReto acierta
-  // las 5 predicciones → ganará el reto al terminar la jornada (+4 FakeReto, -4 FakeMela).
-  await play('FakeReto', { targetUser: aliasToId('FakeMela'), params: {} });
-  const fakeRetoDeal = dealMap.get('FakeReto')!;
-  const fakeRetoPlay = await CardPlay.findOne({ deal: fakeRetoDeal._id });
-  if (fakeRetoPlay) {
-    fakeRetoPlay.params = { ...fakeRetoPlay.params, retoAccepted: true };
-    await fakeRetoPlay.save();
-    log('Reto: FakeMela acepta el desafío de FakeReto');
-  }
+  // reto → FakeReto reta a FakeMela por toda la jornada, jugándose 4 pts. No es optativo
+  // (no hay aceptar/rechazar) — FakeReto acierta las 5 predicciones, así que ganará el reto
+  // al terminar la jornada (+4 FakeReto, -4 FakeMela).
+  await play('FakeReto', { targetUser: aliasToId('FakeMela'), params: { amount: 4 } });
 
-  // reto (rechazado/sin respuesta) → FakeRetoReject reta a FakeVar, que nunca responde →
-  // en cuanto empiece la jornada, FakeVar pierde 2 pts (sin dárselos a FakeRetoReject)
-  await play('FakeRetoReject', { targetUser: aliasToId('FakeVar'), params: {} });
+  // reto → FakeReto2 reta a FakeVar, jugándose solo 2 pts (para probar una cantidad distinta)
+  await play('FakeReto2', { targetUser: aliasToId('FakeVar'), params: { amount: 2 } });
 
   // PENDIENTES (no pre-jugados):
   // FakeVar (el_var) → necesita partido terminado → lo juegas mañana desde finishMockCards.ts
@@ -370,8 +372,8 @@ async function main() {
   log('  │  🃏 FakeComodin → comodín en M1 (0-1, revés del 1-0)   │');
   log('  │  🍺 FakeBorracho→ ataca a FakeEspejo en M0 → reflejo   │');
   log('  │     le invierte su propia predicción (1-2→2-1)         │');
-  log('  │  ⚔️  FakeReto    → reta a FakeMela (acepta) — gana      │');
-  log('  │  ⚔️  FakeRetoReject → reta a FakeVar, nunca responde    │');
+  log('  │  ⚔️  FakeReto    → reta a FakeMela por 4 pts — gana     │');
+  log('  │  ⚔️  FakeReto2   → reta a FakeVar por 2 pts             │');
   log('  │  ⚡ TÚ          → el_doblete PENDIENTE (juega hoy!)   │');
   log('  └────────────────────────────────────────────────────────┘');
   log('');

@@ -172,21 +172,25 @@ async function validatePlay(
       return { targetUserId, params: { secondUserId } };
     }
 
-    // ── Reto: retas a un rival a ver quién queda mejor en la jornada. Se resuelve en dos
-    // fases (respondToReto + applyCardEffects.job.ts): si el rival no acepta a tiempo,
-    // pierde 2 pts sin dárselos a nadie; si acepta, al terminar la jornada quien tenga más
-    // puntos le quita 4 al otro. Siempre como puntuación GLOBAL, no de la jornada ────
+    // ── Reto: retas a un rival a ver quién queda mejor en la jornada, jugándote entre
+    // 2 y 4 puntos. No es optativo para el retado (no hay aceptar/rechazar) — en cuanto se
+    // juega la carta, el reto queda en marcha y se resuelve al terminar la jornada: quien
+    // tenga más puntos le quita al otro la cantidad elegida (empate = nadie gana nada).
     case 'reto': {
       if (!targetUserId) throw new AppError('targetUserId es obligatorio', 400);
       assertNotSelf(userId, targetUserId);
       assertIsMember(group, targetUserId);
+      const { amount } = params as { amount?: number };
+      if (typeof amount !== 'number' || !Number.isInteger(amount) || amount < 2 || amount > 4) {
+        throw new AppError('params.amount debe ser un entero entre 2 y 4', 400);
+      }
       const firstMatch = await Match.findOne({
         competition: 'la_liga', season: deal.season, matchday: deal.matchday,
       }).sort({ startTime: 1 });
       if (firstMatch && new Date() >= new Date(firstMatch.startTime)) {
         throw new AppError('La jornada ya ha empezado', 409);
       }
-      return { targetUserId, params: {} };
+      return { targetUserId, params: { amount } };
     }
 
     default:
@@ -232,81 +236,6 @@ export async function revealMimic(req: Request, res: Response): Promise<void> {
   await deal.save();
 
   res.json({ deal });
-}
-
-// ── Reto: el rival retado acepta o rechaza el desafío antes de que empiece la jornada.
-// No hace falta que el objetivo tenga ninguna carta propia — solo ser el `targetUser` de
-// la jugada. Se puede cambiar de decisión mientras la jornada no haya empezado.
-
-export async function respondToReto(req: Request, res: Response): Promise<void> {
-  const groupId = req.params.groupId as string;
-  const userId = req.user!.id;
-  const { playId, accept } = req.body as { playId?: string; accept?: boolean };
-
-  if (!playId) throw new AppError('playId es obligatorio', 400);
-  if (typeof accept !== 'boolean') throw new AppError('accept debe ser true o false', 400);
-
-  await requireGroupMember(groupId, userId);
-
-  const play = await CardPlay.findById(playId).populate('deal');
-  if (!play) throw new AppError('Reto no encontrado', 404);
-
-  const deal = play.deal as unknown as InstanceType<typeof CardDeal>;
-  if (!deal || deal.card !== 'reto') throw new AppError('Esta jugada no es un Reto', 400);
-  if (deal.group.toString() !== groupId) throw new AppError('El reto no pertenece a esta peña', 403);
-  if (!play.targetUser || play.targetUser.toString() !== userId) {
-    throw new AppError('Este reto no es para ti', 403);
-  }
-
-  const firstMatch = await Match.findOne({
-    competition: 'la_liga', season: deal.season, matchday: deal.matchday,
-  }).sort({ startTime: 1 });
-  if (firstMatch && new Date() >= new Date(firstMatch.startTime)) {
-    throw new AppError('La jornada ya ha empezado, no puedes responder', 409);
-  }
-
-  play.params = { ...play.params, retoAccepted: accept };
-  await play.save();
-
-  res.json({ play });
-}
-
-// ── Retos pendientes de respuesta contra mí, para esta jornada ─────────────────
-
-export async function getPendingRetos(req: Request, res: Response): Promise<void> {
-  const groupId = req.params.groupId as string;
-  const userId = req.user!.id;
-  const { season, matchday } = req.query as { season?: string; matchday?: string };
-  if (!season || !matchday) throw new AppError('season y matchday son obligatorios', 400);
-
-  await requireGroupMember(groupId, userId);
-
-  const matchdayNum = parseInt(matchday, 10);
-  const deals = await CardDeal.find({
-    group: groupId, season, matchday: matchdayNum, card: 'reto', status: 'played',
-  }).select('_id user').populate('user', 'alias');
-  if (deals.length === 0) {
-    res.json({ pending: [] });
-    return;
-  }
-
-  const dealMap = new Map(deals.map((d) => [(d._id as Types.ObjectId).toString(), d]));
-  const plays = await CardPlay.find({
-    deal: { $in: deals.map((d) => d._id) }, targetUser: userId,
-  }).select('_id deal params');
-
-  const pending = plays
-    .filter((p) => p.params?.retoAccepted === undefined)
-    .map((p) => {
-      const deal = dealMap.get(p.deal.toString())!;
-      const challenger = deal.user as unknown as { _id: Types.ObjectId; alias: string };
-      return {
-        playId: (p._id as Types.ObjectId).toString(),
-        challenger: { _id: challenger._id.toString(), alias: challenger.alias },
-      };
-    });
-
-  res.json({ pending });
 }
 
 // ── Main play endpoint ─────────────────────────────────────────────────────
