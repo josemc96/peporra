@@ -326,7 +326,7 @@ export default function CardPlayScreen() {
       )}
       {deal.status === 'expired' && (
         <Text variant="bodyMedium" style={[styles.playedNote, { color: theme.colors.onSurfaceDisabled }]}>
-          La jornada ya terminó sin que jugaras esta carta.
+          Se pasó el plazo para jugar esta carta sin que la jugaras.
         </Text>
       )}
 
