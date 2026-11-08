@@ -8,9 +8,82 @@ import { PredictionScore } from '../models/PredictionScore';
 import { User } from '../models/User';
 import { ManualAdjustment } from '../models/ManualAdjustment';
 import { CardEffect } from '../models/CardEffect';
+import { CardDeal } from '../models/CardDeal';
+import { CardPlay } from '../models/CardPlay';
 import { AppError } from '../utils/AppError';
 import { requireGroupAdmin, requireGroupMember } from '../services/groupAuth.service';
 import { applyMatchdayPenalties } from '../jobs/applyMatchdayPenalties.job';
+
+interface CardNote {
+  icon: string;
+  text: string;
+  delta: number | null;
+}
+
+// Pistas de Reto/La Afición/Dupla para el ranking de jornada: quién ha participado en cada
+// una y qué efecto ha tenido en su puntuación (null = sin efecto numérico que mostrar, ej.
+// "apoyado por X", que no da puntos a quien lo recibe). Mimo/Borracho/etc. no se incluyen
+// aquí porque ya se ven en el detalle de cada partido (predictions/view/[matchId]).
+async function buildCardNotes(
+  groupId: string,
+  season: string,
+  matchdayNum: number,
+  userById: Map<string, { alias: string }>
+): Promise<Map<string, CardNote[]>> {
+  const notesByUser = new Map<string, CardNote[]>();
+  const addNote = (userId: string, note: CardNote) => {
+    if (!notesByUser.has(userId)) notesByUser.set(userId, []);
+    notesByUser.get(userId)!.push(note);
+  };
+  const aliasOf = (userId: string) => userById.get(userId)?.alias ?? '?';
+
+  const deals = await CardDeal.find({
+    group: groupId, season, matchday: matchdayNum, card: { $in: ['reto', 'la_aficion', 'dupla'] }, status: 'played',
+  }).select('_id card user');
+  if (deals.length === 0) return notesByUser;
+
+  const dealById = new Map(deals.map((d) => [(d._id as Types.ObjectId).toString(), d]));
+  const plays = await CardPlay.find({ deal: { $in: deals.map((d) => d._id) } }).select('deal targetUser params');
+
+  const effects = await CardEffect.find({
+    group: groupId, season, matchday: matchdayNum, card: { $in: ['reto', 'la_aficion', 'dupla'] },
+  });
+  const effectOf = (userId: string, card: string) =>
+    effects.find((e) => e.user.toString() === userId && e.card === card)?.points ?? 0;
+
+  for (const play of plays) {
+    const deal = dealById.get(play.deal.toString());
+    if (!deal) continue;
+    const ownerId = deal.user.toString();
+
+    if (deal.card === 'reto' && play.targetUser) {
+      const targetId = play.targetUser.toString();
+      const ownerDelta = effectOf(ownerId, 'reto');
+      const targetDelta = effectOf(targetId, 'reto');
+      addNote(ownerId, { icon: '⚔️', text: `Retó a ${aliasOf(targetId)}`, delta: ownerDelta });
+      addNote(targetId, { icon: '⚔️', text: `Retado por ${aliasOf(ownerId)}`, delta: targetDelta });
+    }
+
+    if (deal.card === 'la_aficion' && play.targetUser) {
+      const targetId = play.targetUser.toString();
+      const bonus = effectOf(ownerId, 'la_aficion');
+      addNote(ownerId, { icon: '📣', text: `Apoyó a ${aliasOf(targetId)}`, delta: bonus > 0 ? bonus : null });
+      addNote(targetId, { icon: '📣', text: `Apoyado por ${aliasOf(ownerId)}`, delta: null });
+    }
+
+    if (deal.card === 'dupla' && play.targetUser && play.params?.secondUserId) {
+      const a = play.targetUser.toString();
+      const b = play.params.secondUserId as string;
+      addNote(a, { icon: '👯', text: `Dupla con ${aliasOf(b)}`, delta: effectOf(a, 'dupla') });
+      addNote(b, { icon: '👯', text: `Dupla con ${aliasOf(a)}`, delta: effectOf(b, 'dupla') });
+      if (ownerId !== a && ownerId !== b) {
+        addNote(ownerId, { icon: '👯', text: `Jugó Dupla sobre ${aliasOf(a)} y ${aliasOf(b)}`, delta: null });
+      }
+    }
+  }
+
+  return notesByUser;
+}
 
 export async function getPenaltyConfig(req: Request, res: Response): Promise<void> {
   const groupId = req.params.groupId as string;
@@ -145,6 +218,8 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
   const users = await User.find({ _id: { $in: memberIds } }).select('alias email');
   const userById = new Map(users.map((u) => [(u._id as Types.ObjectId).toString(), u]));
 
+  const cardNotesByUser = await buildCardNotes(groupId, season, matchdayNum, userById);
+
   const ranking = Array.from(totals.entries())
     .filter(([userId]) => userById.has(userId))
     .map(([userId, points]) => ({
@@ -152,6 +227,7 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
       points,
       exactScores: exactScores.get(userId) ?? 0,
       debt: debtByUser.get(userId) ?? 0,
+      cardNotes: cardNotesByUser.get(userId) ?? [],
     }))
     .sort((a, b) => b.points !== a.points ? b.points - a.points : b.exactScores - a.exactScores);
 

@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Avatar, IconButton, Surface, Text } from 'react-native-paper';
 
 import { colors } from '@/config/theme';
+import { CardNote } from '@/api/penalties';
 
 const MEDAL_COLORS = ['#FFBE0B', '#C0C0C0', '#CD7F32'];
 
@@ -13,11 +14,13 @@ export function PlayerRow({
   alias, isMe, position, exactScores,
   rankingView, matchday,
   seasonPoints, matchdayPoints, seasonDebt, matchdayDebt,
+  cardNotes,
   onPress, onKick,
 }: {
   alias: string; isMe: boolean; position: number; exactScores: number;
   rankingView: 'matchday' | 'season'; matchday: number;
   seasonPoints: number; matchdayPoints: number; seasonDebt: number; matchdayDebt: number;
+  cardNotes?: CardNote[];
   onPress: () => void; onKick?: () => void;
 }) {
   const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
@@ -47,6 +50,23 @@ export function PlayerRow({
             <Text variant="labelSmall" style={styles.exactLabel}>
               {exactScores} exacto{exactScores !== 1 ? 's' : ''} en la temporada
             </Text>
+          )}
+          {isMatchday && cardNotes && cardNotes.length > 0 && (
+            <View style={styles.cardNotes}>
+              {cardNotes.map((note, i) => (
+                <Text
+                  key={i}
+                  variant="labelSmall"
+                  style={[
+                    styles.cardNoteText,
+                    note.delta != null && note.delta > 0 && styles.cardNoteUp,
+                    note.delta != null && note.delta < 0 && styles.cardNoteDown,
+                  ]}
+                >
+                  {note.icon} {note.text}{note.delta != null ? ` (${note.delta > 0 ? '+' : ''}${note.delta})` : ''}
+                </Text>
+              ))}
+            </View>
           )}
         </View>
         <View style={styles.rightCol}>
@@ -87,6 +107,10 @@ const styles = StyleSheet.create({
   alias: { fontWeight: '500' },
   aliasMe: { color: '#C04A1A', fontWeight: '700' },
   exactLabel: { opacity: 0.5, marginTop: 1 },
+  cardNotes: { marginTop: 2, gap: 1 },
+  cardNoteText: { opacity: 0.7 },
+  cardNoteUp: { color: '#22C55E', opacity: 1 },
+  cardNoteDown: { color: '#EF4444', opacity: 1 },
   rightCol: { alignItems: 'flex-end', gap: 0 },
   pointsPrimary: { fontWeight: '700' },
   pointsSecondary: { opacity: 0.45, marginBottom: 2 },

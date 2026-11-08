@@ -227,6 +227,7 @@ export default function GroupTab() {
         matchdayPoints={matchdayEntry?.points ?? 0}
         seasonDebt={debtMap.get(item.user.id) ?? 0}
         matchdayDebt={matchdayEntry?.debt ?? 0}
+        cardNotes={matchdayEntry?.cardNotes}
         onPress={goToProfile}
         onKick={canKick ? () => kick(item.user.id) : undefined}
       />

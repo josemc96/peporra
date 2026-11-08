@@ -4,6 +4,7 @@ import { syncLaLigaMatches } from './syncMatches.job';
 import { syncTopScorers } from './syncScorers.job';
 import { calculateScores } from './calculateScores.job';
 import { dealCards } from './dealCards.job';
+import { expireCardDeals } from './expireCardDeals.job';
 
 export function startScheduledJobs(): void {
   if (!env.footballApiKey) {
@@ -41,6 +42,13 @@ export function startScheduledJobs(): void {
       if (result.dealt > 0) console.log(`Reparto de cartas: ${result.dealt} cartas repartidas`);
     } catch (err) {
       console.error('Error al repartir cartas:', err);
+    }
+
+    try {
+      const result = await expireCardDeals();
+      if (result.expired > 0) console.log(`Cartas expiradas: ${result.expired}`);
+    } catch (err) {
+      console.error('Error al expirar cartas:', err);
     }
   });
 }

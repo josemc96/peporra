@@ -14,11 +14,18 @@ export interface PenaltyConfig {
   missingPredictionsAmount: number;
 }
 
+export interface CardNote {
+  icon: string;
+  text: string;
+  delta: number | null;
+}
+
 export interface RankingEntry {
   user: { id: string; alias: string; email: string };
   points: number;
   exactScores: number;
   debt: number;
+  cardNotes: CardNote[];
 }
 
 export interface DebtEntry {
