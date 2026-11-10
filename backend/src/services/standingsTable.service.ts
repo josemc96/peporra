@@ -9,6 +9,16 @@ export const PHASE_MATCHDAY: Record<StandingsPhase, number> = {
 
 export type MatchResult = 'W' | 'D' | 'L';
 
+export interface MatchResultDetail {
+  opponent: string;
+  opponentCrest?: string;
+  isHome: boolean;
+  goalsFor: number;
+  goalsAgainst: number;
+  result: MatchResult;
+  startTime: string;
+}
+
 interface StandingsRow {
   team: string;
   crest?: string;
@@ -20,12 +30,14 @@ interface StandingsRow {
   goalsAgainst: number;
   points: number;
   results: MatchResult[];
+  resultDetails: MatchResultDetail[];
 }
 
-export interface FullStandingsRow extends Omit<StandingsRow, 'results'> {
+export interface FullStandingsRow extends Omit<StandingsRow, 'results' | 'resultDetails'> {
   position: number;
   goalDifference: number;
   last5: MatchResult[];
+  last5Detail: MatchResultDetail[];
 }
 
 export async function isPhaseComplete(season: string, phase: StandingsPhase): Promise<boolean> {
@@ -51,7 +63,7 @@ async function buildTable(season: string, throughMatchday?: number): Promise<Sta
   function ensure(team: string, crest?: string): StandingsRow {
     let row = table.get(team);
     if (!row) {
-      row = { team, crest, played: 0, won: 0, drawn: 0, lost: 0, points: 0, goalsFor: 0, goalsAgainst: 0, results: [] };
+      row = { team, crest, played: 0, won: 0, drawn: 0, lost: 0, points: 0, goalsFor: 0, goalsAgainst: 0, results: [], resultDetails: [] };
       table.set(team, row);
     } else if (!row.crest && crest) {
       row.crest = crest;
@@ -72,16 +84,28 @@ async function buildTable(season: string, throughMatchday?: number): Promise<Sta
     away.goalsFor += awayScore;
     away.goalsAgainst += homeScore;
 
+    let homeResult: MatchResult;
+    let awayResult: MatchResult;
     if (homeScore > awayScore) {
-      home.won += 1; home.points += 3; home.results.push('W');
-      away.lost += 1; away.results.push('L');
+      home.won += 1; home.points += 3; homeResult = 'W';
+      away.lost += 1; awayResult = 'L';
     } else if (homeScore < awayScore) {
-      away.won += 1; away.points += 3; away.results.push('W');
-      home.lost += 1; home.results.push('L');
+      away.won += 1; away.points += 3; awayResult = 'W';
+      home.lost += 1; homeResult = 'L';
     } else {
-      home.drawn += 1; home.points += 1; home.results.push('D');
-      away.drawn += 1; away.points += 1; away.results.push('D');
+      home.drawn += 1; home.points += 1; homeResult = 'D';
+      away.drawn += 1; away.points += 1; awayResult = 'D';
     }
+    home.results.push(homeResult);
+    away.results.push(awayResult);
+    home.resultDetails.push({
+      opponent: match.awayTeam, opponentCrest: match.awayCrest, isHome: true,
+      goalsFor: homeScore, goalsAgainst: awayScore, result: homeResult, startTime: match.startTime.toISOString(),
+    });
+    away.resultDetails.push({
+      opponent: match.homeTeam, opponentCrest: match.homeCrest, isHome: false,
+      goalsFor: awayScore, goalsAgainst: homeScore, result: awayResult, startTime: match.startTime.toISOString(),
+    });
   }
 
   return Array.from(table.values()).sort((a, b) => {
@@ -115,12 +139,13 @@ export async function calculateCurrentTable(
 export async function calculateFullCurrentTable(season: string): Promise<FullStandingsRow[]> {
   const rows = await buildTable(season);
   return rows.map((row, index) => {
-    const { results, ...rest } = row;
+    const { results, resultDetails, ...rest } = row;
     return {
       ...rest,
       position: index + 1,
       goalDifference: row.goalsFor - row.goalsAgainst,
       last5: results.slice(-5),
+      last5Detail: resultDetails.slice(-5),
     };
   });
 }

@@ -2,6 +2,16 @@ import { apiFetch } from './client';
 
 export type MatchResult = 'W' | 'D' | 'L';
 
+export interface MatchResultDetail {
+  opponent: string;
+  opponentCrest?: string;
+  isHome: boolean;
+  goalsFor: number;
+  goalsAgainst: number;
+  result: MatchResult;
+  startTime: string;
+}
+
 export interface StandingsRow {
   position: number;
   team: string;
@@ -15,6 +25,7 @@ export interface StandingsRow {
   goalDifference: number;
   points: number;
   last5: MatchResult[];
+  last5Detail: MatchResultDetail[];
 }
 
 export const standingsTableApi = {

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Text, TextInput } from 'react-native-paper';
+import { Button, Icon, Text, TextInput } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { predictionsApi } from '@/api/predictions';
-import { standingsTableApi, MatchResult } from '@/api/standingsTable';
+import { standingsTableApi, MatchResult, MatchResultDetail } from '@/api/standingsTable';
 import { ApiError } from '@/api/client';
 import { colors } from '@/config/theme';
 
@@ -15,18 +15,45 @@ function formatDate(iso: string): string {
   });
 }
 
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+}
+
 const RESULT_COLOR: Record<MatchResult, string> = {
   W: colors.green,
   L: colors.error,
   D: colors.text2,
 };
 
-function Last5Dots({ results }: { results: MatchResult[] }) {
+function Last5Dots({ results, expanded, onToggle }: { results: MatchResult[]; expanded: boolean; onToggle: () => void }) {
   if (results.length === 0) return null;
   return (
-    <View style={styles.last5Row}>
-      {results.map((r, i) => (
-        <View key={i} style={[styles.last5Dot, { backgroundColor: RESULT_COLOR[r] }]} />
+    <Pressable onPress={onToggle} hitSlop={8}>
+      <View style={[styles.last5Row, expanded && styles.last5RowActive]}>
+        {results.map((r, i) => (
+          <View key={i} style={[styles.last5Dot, { backgroundColor: RESULT_COLOR[r] }]} />
+        ))}
+        <Icon source={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={colors.text2} />
+      </View>
+    </Pressable>
+  );
+}
+
+function Last5Panel({ teamName, detail }: { teamName: string; detail: MatchResultDetail[] }) {
+  if (detail.length === 0) return null;
+  return (
+    <View style={styles.last5Panel}>
+      <Text variant="labelMedium" style={styles.last5PanelTitle}>Últimos 5 · {teamName}</Text>
+      {detail.map((m, i) => (
+        <View key={i} style={styles.last5PanelRow}>
+          <View style={[styles.last5PanelDot, { backgroundColor: RESULT_COLOR[m.result] }]} />
+          {m.opponentCrest ? <Image source={{ uri: m.opponentCrest }} style={styles.last5PanelCrest} /> : null}
+          <Text variant="bodySmall" style={styles.last5PanelOpponent} numberOfLines={1}>
+            {m.isHome ? 'vs' : '@'} {m.opponent}
+          </Text>
+          <Text variant="bodySmall" style={styles.last5PanelScore}>{m.goalsFor}-{m.goalsAgainst}</Text>
+          <Text variant="labelSmall" style={styles.last5PanelDate}>{formatShortDate(m.startTime)}</Text>
+        </View>
       ))}
     </View>
   );
@@ -51,6 +78,7 @@ export default function EditPredictionScreen() {
   const [homeScore, setHomeScore] = useState(currentHome ?? '');
   const [awayScore, setAwayScore] = useState(currentAway ?? '');
   const [error, setError] = useState('');
+  const [expandedTeam, setExpandedTeam] = useState<'home' | 'away' | null>(null);
 
   const { data: otherGroups } = useQuery({
     queryKey: ['predictions-across-groups', matchId],
@@ -70,6 +98,8 @@ export default function EditPredictionScreen() {
   const awayPosition = rowByTeam.get(awayTeam)?.position;
   const homeLast5 = rowByTeam.get(homeTeam)?.last5 ?? [];
   const awayLast5 = rowByTeam.get(awayTeam)?.last5 ?? [];
+  const homeLast5Detail = rowByTeam.get(homeTeam)?.last5Detail ?? [];
+  const awayLast5Detail = rowByTeam.get(awayTeam)?.last5Detail ?? [];
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -116,7 +146,11 @@ export default function EditPredictionScreen() {
                 <Text variant="labelMedium" style={styles.teamPositionText}>{homePosition}º</Text>
               </View>
             )}
-            <Last5Dots results={homeLast5} />
+            <Last5Dots
+              results={homeLast5}
+              expanded={expandedTeam === 'home'}
+              onToggle={() => setExpandedTeam(expandedTeam === 'home' ? null : 'home')}
+            />
           </View>
 
           <View style={styles.scoreInputs}>
@@ -152,9 +186,16 @@ export default function EditPredictionScreen() {
                 <Text variant="labelMedium" style={styles.teamPositionText}>{awayPosition}º</Text>
               </View>
             )}
-            <Last5Dots results={awayLast5} />
+            <Last5Dots
+              results={awayLast5}
+              expanded={expandedTeam === 'away'}
+              onToggle={() => setExpandedTeam(expandedTeam === 'away' ? null : 'away')}
+            />
           </View>
         </View>
+
+        {expandedTeam === 'home' && <Last5Panel teamName={homeTeam} detail={homeLast5Detail} />}
+        {expandedTeam === 'away' && <Last5Panel teamName={awayTeam} detail={awayLast5Detail} />}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -250,12 +291,54 @@ const styles = StyleSheet.create({
   },
   last5Row: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
+    padding: 4,
+    borderRadius: 8,
+  },
+  last5RowActive: {
+    backgroundColor: '#1A1F35',
   },
   last5Dot: {
     width: 10,
     height: 10,
     borderRadius: 5,
+  },
+  last5Panel: {
+    gap: 6,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#1A1F35',
+  },
+  last5PanelTitle: {
+    opacity: 0.6,
+    marginBottom: 2,
+  },
+  last5PanelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  last5PanelDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  last5PanelCrest: {
+    width: 18,
+    height: 18,
+  },
+  last5PanelOpponent: {
+    flex: 1,
+    opacity: 0.85,
+  },
+  last5PanelScore: {
+    fontWeight: '700',
+  },
+  last5PanelDate: {
+    opacity: 0.5,
+    width: 48,
+    textAlign: 'right',
   },
   scoreInputs: {
     flexDirection: 'row',
