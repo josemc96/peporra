@@ -6,6 +6,7 @@ import { colors } from '@/config/theme';
 import { CardNote, MatchBreakdown } from '@/api/penalties';
 
 const MEDAL_COLORS = ['#FFBE0B', '#C0C0C0', '#CD7F32'];
+const DEBT_BORDER_COLOR = '#EF4444';
 
 function scoreLabel(home: number | null, away: number | null): string {
   return home != null && away != null ? `${home}-${away}` : 'sin predicción';
@@ -70,20 +71,44 @@ export function PlayerRow({
 
   const hasBreakdown = isMatchday && !!matches && matches.length > 0;
 
+  // Solo en el ranking de jornada: sin número de posición, el avatar lleva un borde de
+  // medalla (oro/plata/bronce) o, si no está en el podio pero paga al terminar la jornada,
+  // un borde rojo — en vez de competir por ancho con el nombre, la posición se ve en el borde.
+  const avatarBorderColor = isMatchday
+    ? (medalColor ?? (matchdayDebt > 0 ? DEBT_BORDER_COLOR : undefined))
+    : undefined;
+
   return (
     <View>
     <Pressable onPress={onPress} android_ripple={{ color: '#0001' }}>
       <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
-        <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
-          <Text variant="titleMedium" style={styles.posText}>{position}</Text>
-        </View>
-        <Avatar.Text size={36} label={(alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
+        {!isMatchday && (
+          <View style={styles.posAvatarCol}>
+            <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
+              <Text variant="labelSmall" style={styles.posText}>{position}</Text>
+            </View>
+            <Avatar.Text size={26} label={(alias ?? '?').slice(0, 2).toUpperCase()} style={styles.avatar} />
+          </View>
+        )}
         <View style={styles.userInfo}>
-          <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]}>
-            {alias ?? '?'}{isMe ? '  (tú)' : ''}
-          </Text>
+          {isMatchday ? (
+            <View style={styles.matchdayHeaderRow}>
+              <Avatar.Text
+                size={28}
+                label={(alias ?? '?').slice(0, 2).toUpperCase()}
+                style={[styles.avatar, avatarBorderColor && { borderWidth: 2, borderColor: avatarBorderColor }]}
+              />
+              <Text variant="bodyLarge" style={[styles.alias, styles.aliasShrink, isMe && styles.aliasMe]} numberOfLines={1}>
+                {alias ?? '?'}{isMe ? '  (tú)' : ''}
+              </Text>
+            </View>
+          ) : (
+            <Text variant="bodyLarge" style={[styles.alias, isMe && styles.aliasMe]} numberOfLines={1}>
+              {alias ?? '?'}{isMe ? '  (tú)' : ''}
+            </Text>
+          )}
           {exactScores > 0 && (
-            <Text variant="labelSmall" style={styles.exactLabel}>
+            <Text variant="labelSmall" style={styles.exactLabel} numberOfLines={1}>
               {exactScores} exacto{exactScores !== 1 ? 's' : ''} en la temporada
             </Text>
           )}
@@ -93,6 +118,7 @@ export function PlayerRow({
                 <Text
                   key={i}
                   variant="labelSmall"
+                  numberOfLines={1}
                   style={[
                     styles.cardNoteText,
                     note.delta != null && note.delta > 0 && styles.cardNoteUp,
@@ -127,12 +153,13 @@ export function PlayerRow({
         {hasBreakdown && (
           <IconButton
             icon={expanded ? 'chevron-up' : 'chevron-down'}
-            size={20}
+            size={18}
+            style={styles.smallIconBtn}
             onPress={(e) => { e.stopPropagation?.(); setExpanded(!expanded); }}
           />
         )}
         {onKick && (
-          <IconButton icon="account-remove" size={20} onPress={(e) => { e.stopPropagation?.(); onKick(); }} />
+          <IconButton icon="account-remove" size={18} style={styles.smallIconBtn} onPress={(e) => { e.stopPropagation?.(); onKick(); }} />
         )}
       </Surface>
     </Pressable>
@@ -151,13 +178,17 @@ export function PlayerRow({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 10, gap: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 10, gap: 6 },
   rowMe: { borderWidth: 1.5, borderColor: '#C04A1A' },
-  posBox: { width: 32, height: 32, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  posAvatarCol: { alignItems: 'center', gap: 2 },
+  posBox: { width: 20, height: 16, borderRadius: 5, justifyContent: 'center', alignItems: 'center' },
   posBoxDefault: { backgroundColor: '#1C2236' },
   posText: { fontWeight: '700', color: '#E8EAF2' },
   avatar: { backgroundColor: '#232B42' },
-  userInfo: { flex: 1 },
+  matchdayHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  aliasShrink: { flex: 1, minWidth: 0 },
+  userInfo: { flex: 1, minWidth: 0 },
+  smallIconBtn: { width: 28, height: 28, margin: 0 },
   alias: { fontWeight: '500' },
   aliasMe: { color: '#C04A1A', fontWeight: '700' },
   exactLabel: { opacity: 0.5, marginTop: 1 },
@@ -173,7 +204,7 @@ const styles = StyleSheet.create({
   breakdownTitle: { opacity: 0.6, marginBottom: 2 },
   breakdownMatch: { gap: 2 },
   breakdownHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  breakdownTeams: { flex: 1, opacity: 0.85 },
+  breakdownTeams: { flex: 1, minWidth: 0, opacity: 0.85 },
   breakdownRealScore: { fontWeight: '700', opacity: 0.85 },
   breakdownPred: { opacity: 0.7 },
   breakdownMine: { opacity: 0.6 },
