@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Avatar, IconButton, Surface, Text } from 'react-native-paper';
 
 import { colors } from '@/config/theme';
@@ -19,9 +19,13 @@ function MatchBreakdownRow({ match, mine }: { match: MatchBreakdown; mine?: Matc
   return (
     <View style={styles.breakdownMatch}>
       <View style={styles.breakdownHeader}>
-        <Text variant="labelSmall" style={styles.breakdownTeams} numberOfLines={1}>
-          {match.homeTeam} vs {match.awayTeam}
-        </Text>
+        <View style={styles.breakdownTeamsRow}>
+          {match.homeCrest ? <Image source={{ uri: match.homeCrest }} style={styles.breakdownCrest} /> : null}
+          <Text variant="labelSmall" style={styles.breakdownTeamName} numberOfLines={1}>{match.homeTeam}</Text>
+          <Text variant="labelSmall" style={styles.breakdownVs}>vs</Text>
+          {match.awayCrest ? <Image source={{ uri: match.awayCrest }} style={styles.breakdownCrest} /> : null}
+          <Text variant="labelSmall" style={styles.breakdownTeamName} numberOfLines={1}>{match.awayTeam}</Text>
+        </View>
         <Text variant="labelSmall" style={styles.breakdownRealScore}>
           {finished ? `${match.homeScore}-${match.awayScore}` : 'pendiente'}
         </Text>
@@ -204,7 +208,10 @@ const styles = StyleSheet.create({
   breakdownTitle: { opacity: 0.6, marginBottom: 2 },
   breakdownMatch: { gap: 2 },
   breakdownHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  breakdownTeams: { flex: 1, minWidth: 0, opacity: 0.85 },
+  breakdownTeamsRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  breakdownCrest: { width: 14, height: 14 },
+  breakdownTeamName: { flexShrink: 1, opacity: 0.85 },
+  breakdownVs: { opacity: 0.5 },
   breakdownRealScore: { fontWeight: '700', opacity: 0.85 },
   breakdownPred: { opacity: 0.7 },
   breakdownMine: { opacity: 0.6 },
