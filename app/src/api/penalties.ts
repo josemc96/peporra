@@ -31,6 +31,7 @@ export interface MatchBreakdown {
   predictedHome: number | null;
   predictedAway: number | null;
   isExact: boolean;
+  points: number | null;
 }
 
 export interface RankingEntry {

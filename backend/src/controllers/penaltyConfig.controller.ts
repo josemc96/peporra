@@ -31,6 +31,7 @@ interface MatchBreakdownEntry {
   predictedHome: number | null;
   predictedAway: number | null;
   isExact: boolean;
+  points: number | null;
 }
 
 // Pistas de Reto/La Afición/Dupla para el ranking de jornada: quién ha participado en cada
@@ -198,6 +199,7 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
       group: groupId,
       prediction: { $in: predictions.map((p) => p._id) },
     }).select('prediction points');
+    const scoreByPrediction = new Map(scores.map((s) => [s.prediction.toString(), s.points]));
 
     for (const score of scores) {
       const userId = predUserMap.get(score.prediction.toString());
@@ -222,11 +224,17 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
     // así el frontend puede comparar su predicción con la del jugador seleccionado sin
     // pedir nada aparte.
     const predByUserMatch = new Map(predictions.map((p) => [`${p.user.toString()}|${p.match.toString()}`, p]));
+    const viewerId = req.user!.id;
     for (const match of matches) {
       const matchId = (match._id as Types.ObjectId).toString();
       const isFinished = match.status === 'finished';
       for (const userId of memberIds) {
+        // Antes de que termine el partido, no se revela la predicción de nadie más que la
+        // propia (igual que en el resto de la app — ver matchVisibility) — si no, se podría
+        // ver con quién empatas o copiar el resultado de un rival mirando el ranking.
+        const reveal = isFinished || userId === viewerId;
         const pred = predByUserMatch.get(`${userId}|${matchId}`);
+        const points = pred ? scoreByPrediction.get((pred._id as Types.ObjectId).toString()) : undefined;
         matchesByUser.get(userId)!.push({
           matchId,
           homeTeam: match.homeTeam,
@@ -235,9 +243,10 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
           awayCrest: match.awayCrest,
           homeScore: isFinished ? match.homeScore! : null,
           awayScore: isFinished ? match.awayScore! : null,
-          predictedHome: pred?.predictedHome ?? null,
-          predictedAway: pred?.predictedAway ?? null,
+          predictedHome: reveal ? (pred?.predictedHome ?? null) : null,
+          predictedAway: reveal ? (pred?.predictedAway ?? null) : null,
           isExact: !!(isFinished && pred && pred.predictedHome === match.homeScore && pred.predictedAway === match.awayScore),
+          points: isFinished ? (points ?? null) : null,
         });
       }
     }

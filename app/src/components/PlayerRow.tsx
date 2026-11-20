@@ -12,10 +12,23 @@ function scoreLabel(home: number | null, away: number | null): string {
   return home != null && away != null ? `${home}-${away}` : 'sin predicción';
 }
 
+function sign(home: number, away: number): number {
+  return home > away ? 1 : home < away ? -1 : 0;
+}
+
+// Verde/rojo según el 1X2 (signo), no el resultado exacto — el resultado exacto ya se ve
+// en los puntos ganados, pero acertar quién gana (o el empate) cuenta como acierto igual.
+function isSignCorrect(m: MatchBreakdown): boolean {
+  if (m.homeScore == null || m.awayScore == null || m.predictedHome == null || m.predictedAway == null) return false;
+  return sign(m.predictedHome, m.predictedAway) === sign(m.homeScore, m.awayScore);
+}
+
 // Un partido del desplegable de aciertos/fallos — la predicción del jugador seleccionado,
 // y debajo (si no eres tú mismo) la tuya propia para el mismo partido, para comparar.
 function MatchBreakdownRow({ match, mine }: { match: MatchBreakdown; mine?: MatchBreakdown }) {
   const finished = match.homeScore != null;
+  const hit = finished && isSignCorrect(match);
+  const mineHit = mine && finished && isSignCorrect(mine);
   return (
     <View style={styles.breakdownMatch}>
       <View style={styles.breakdownHeader}>
@@ -30,12 +43,14 @@ function MatchBreakdownRow({ match, mine }: { match: MatchBreakdown; mine?: Matc
           {finished ? `${match.homeScore}-${match.awayScore}` : 'pendiente'}
         </Text>
       </View>
-      <Text variant="labelSmall" style={[styles.breakdownPred, finished && (match.isExact ? styles.breakdownHit : styles.breakdownMiss)]}>
-        {finished ? (match.isExact ? '✓' : '✗') : '·'} {scoreLabel(match.predictedHome, match.predictedAway)}
+      <Text variant="labelSmall" style={[styles.breakdownPred, finished && (hit ? styles.breakdownHit : styles.breakdownMiss)]}>
+        {finished ? (hit ? '✓' : '✗') : '·'} {scoreLabel(match.predictedHome, match.predictedAway)}
+        {match.points != null ? ` (${match.points > 0 ? '+' : ''}${match.points} pts)` : ''}
       </Text>
       {mine && (
-        <Text variant="labelSmall" style={[styles.breakdownPred, styles.breakdownMine, finished && (mine.isExact ? styles.breakdownHit : styles.breakdownMiss)]}>
-          {finished ? (mine.isExact ? '✓' : '✗') : '·'} Tú: {scoreLabel(mine.predictedHome, mine.predictedAway)}
+        <Text variant="labelSmall" style={[styles.breakdownPred, styles.breakdownMine, finished && (mineHit ? styles.breakdownHit : styles.breakdownMiss)]}>
+          {finished ? (mineHit ? '✓' : '✗') : '·'} Tú: {scoreLabel(mine.predictedHome, mine.predictedAway)}
+          {mine.points != null ? ` (${mine.points > 0 ? '+' : ''}${mine.points} pts)` : ''}
         </Text>
       )}
     </View>
