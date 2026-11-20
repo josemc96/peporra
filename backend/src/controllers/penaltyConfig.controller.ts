@@ -20,6 +20,19 @@ interface CardNote {
   delta: number | null;
 }
 
+interface MatchBreakdownEntry {
+  matchId: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeCrest?: string;
+  awayCrest?: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  predictedHome: number | null;
+  predictedAway: number | null;
+  isExact: boolean;
+}
+
 // Pistas de Reto/La Afición/Dupla para el ranking de jornada: quién ha participado en cada
 // una y qué efecto ha tenido en su puntuación (null = sin efecto numérico que mostrar, ej.
 // "apoyado por X", que no da puntos a quien lo recibe). Mimo/Borracho/etc. no se incluyen
@@ -168,11 +181,14 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
   const group = await requireGroupMember(groupId, req.user!.id);
   const memberIds = group.members.map((m) => m.toString());
 
-  const matches = await Match.find({ competition: 'la_liga', season, matchday: matchdayNum }).select('_id homeScore awayScore status');
+  const matches = await Match.find({ competition: 'la_liga', season, matchday: matchdayNum })
+    .select('_id homeTeam awayTeam homeCrest awayCrest homeScore awayScore status')
+    .sort({ startTime: 1 });
   const matchIds = matches.map((m) => m._id);
 
   const totals = new Map<string, number>(memberIds.map((id) => [id, 0]));
   const exactScores = new Map<string, number>(memberIds.map((id) => [id, 0]));
+  const matchesByUser = new Map<string, MatchBreakdownEntry[]>(memberIds.map((id) => [id, []]));
 
   if (matchIds.length) {
     const predictions = await Prediction.find({ match: { $in: matchIds }, group: groupId }).select('_id user predictedHome predictedAway match');
@@ -198,6 +214,31 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
       if (match && pred.predictedHome === match.homeScore && pred.predictedAway === match.awayScore) {
         const key = pred.user.toString();
         exactScores.set(key, (exactScores.get(key) ?? 0) + 1);
+      }
+    }
+
+    // Desglose partido a partido por usuario (acertó/falló + su predicción) — para el
+    // desplegable del ranking de jornada, incluye también al propio usuario que consulta,
+    // así el frontend puede comparar su predicción con la del jugador seleccionado sin
+    // pedir nada aparte.
+    const predByUserMatch = new Map(predictions.map((p) => [`${p.user.toString()}|${p.match.toString()}`, p]));
+    for (const match of matches) {
+      const matchId = (match._id as Types.ObjectId).toString();
+      const isFinished = match.status === 'finished';
+      for (const userId of memberIds) {
+        const pred = predByUserMatch.get(`${userId}|${matchId}`);
+        matchesByUser.get(userId)!.push({
+          matchId,
+          homeTeam: match.homeTeam,
+          awayTeam: match.awayTeam,
+          homeCrest: match.homeCrest,
+          awayCrest: match.awayCrest,
+          homeScore: isFinished ? match.homeScore! : null,
+          awayScore: isFinished ? match.awayScore! : null,
+          predictedHome: pred?.predictedHome ?? null,
+          predictedAway: pred?.predictedAway ?? null,
+          isExact: !!(isFinished && pred && pred.predictedHome === match.homeScore && pred.predictedAway === match.awayScore),
+        });
       }
     }
   }
@@ -228,6 +269,7 @@ export async function getMatchdayRanking(req: Request, res: Response): Promise<v
       exactScores: exactScores.get(userId) ?? 0,
       debt: debtByUser.get(userId) ?? 0,
       cardNotes: cardNotesByUser.get(userId) ?? [],
+      matches: matchesByUser.get(userId) ?? [],
     }))
     .sort((a, b) => b.points !== a.points ? b.points - a.points : b.exactScores - a.exactScores);
 

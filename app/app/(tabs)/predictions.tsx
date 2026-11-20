@@ -606,6 +606,8 @@ export default function PredictionsTab() {
                 seasonDebt={seasonDebtMap.get(item.user.id) ?? 0}
                 matchdayDebt={matchdayRankingMap.get(item.user.id)?.debt ?? 0}
                 cardNotes={matchdayRankingMap.get(item.user.id)?.cardNotes}
+                matches={matchdayRankingMap.get(item.user.id)?.matches}
+                myMatches={matchdayRankingMap.get(user?.id ?? '')?.matches}
                 onPress={() => router.push({
                   pathname: '/user/[userId]' as never,
                   params: {
