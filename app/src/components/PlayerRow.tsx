@@ -25,7 +25,14 @@ function isSignCorrect(m: MatchBreakdown): boolean {
 
 // Un partido del desplegable de aciertos/fallos — la predicción del jugador seleccionado,
 // y debajo (si no eres tú mismo) la tuya propia para el mismo partido, para comparar.
-function MatchBreakdownRow({ match, mine }: { match: MatchBreakdown; mine?: MatchBreakdown }) {
+// `running`/`myRunning` es la puntuación acumulada de la jornada justo al terminar este
+// partido (en el orden cronológico en que se han ido jugando), para ver cómo iba cada uno
+// en cada momento, no solo el total final.
+function MatchBreakdownRow({
+  match, mine, running, myRunning,
+}: {
+  match: MatchBreakdown; mine?: MatchBreakdown; running: number; myRunning?: number;
+}) {
   const finished = match.homeScore != null;
   const hit = finished && isSignCorrect(match);
   const mineHit = mine && finished && isSignCorrect(mine);
@@ -46,11 +53,13 @@ function MatchBreakdownRow({ match, mine }: { match: MatchBreakdown; mine?: Matc
       <Text variant="labelSmall" style={[styles.breakdownPred, finished && (hit ? styles.breakdownHit : styles.breakdownMiss)]}>
         {finished ? (hit ? '✓' : '✗') : '·'} {scoreLabel(match.predictedHome, match.predictedAway)}
         {match.points != null ? ` (${match.points > 0 ? '+' : ''}${match.points} pts)` : ''}
+        <Text style={styles.breakdownRunning}> · {running} pts</Text>
       </Text>
       {mine && (
         <Text variant="labelSmall" style={[styles.breakdownPred, styles.breakdownMine, finished && (mineHit ? styles.breakdownHit : styles.breakdownMiss)]}>
           {finished ? (mineHit ? '✓' : '✗') : '·'} Tú: {scoreLabel(mine.predictedHome, mine.predictedAway)}
           {mine.points != null ? ` (${mine.points > 0 ? '+' : ''}${mine.points} pts)` : ''}
+          <Text style={styles.breakdownRunning}> · {myRunning} pts</Text>
         </Text>
       )}
     </View>
@@ -187,9 +196,24 @@ export function PlayerRow({
         <Text variant="labelMedium" style={styles.breakdownTitle}>
           Partidos de {alias} en J{matchday}
         </Text>
-        {matches!.map((m) => (
-          <MatchBreakdownRow key={m.matchId} match={m} mine={!isMe ? myMatchById.get(m.matchId) : undefined} />
-        ))}
+        {(() => {
+          let runningTarget = 0;
+          let runningMine = 0;
+          return matches!.map((m) => {
+            const mine = !isMe ? myMatchById.get(m.matchId) : undefined;
+            runningTarget += m.points ?? 0;
+            if (mine) runningMine += mine.points ?? 0;
+            return (
+              <MatchBreakdownRow
+                key={m.matchId}
+                match={m}
+                mine={mine}
+                running={runningTarget}
+                myRunning={mine ? runningMine : undefined}
+              />
+            );
+          });
+        })()}
       </View>
     )}
     </View>
@@ -230,6 +254,7 @@ const styles = StyleSheet.create({
   breakdownRealScore: { fontWeight: '700', opacity: 0.85 },
   breakdownPred: { opacity: 0.7 },
   breakdownMine: { opacity: 0.6 },
+  breakdownRunning: { opacity: 0.5, fontWeight: '400' },
   breakdownHit: { color: '#22C55E', opacity: 1 },
   breakdownMiss: { color: '#EF4444', opacity: 1 },
   pointsPrimary: { fontWeight: '700' },

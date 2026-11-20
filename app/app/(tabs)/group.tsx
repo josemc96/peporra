@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import {
-  ActivityIndicator, Button, Chip,
-  Menu, Surface, Text,
+  ActivityIndicator, Button, Chip, Dialog,
+  Menu, Portal, Surface, Text,
 } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -31,6 +31,7 @@ export default function GroupTab() {
   const [rankingView, setRankingView] = useState<'matchday' | 'season'>('matchday');
   const [matchday, setMatchday] = useState(1);
   const [betsMenuVisible, setBetsMenuVisible] = useState(false);
+  const [kickTarget, setKickTarget] = useState<{ id: string; alias: string } | null>(null);
   const hasSetCurrentMatchday = useRef(false);
 
   const groupId = group?.id ?? '';
@@ -145,7 +146,10 @@ export default function GroupTab() {
 
   const { mutate: kick } = useMutation({
     mutationFn: (userId: string) => groupsApi.kick(groupId, userId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ranking', groupId, season] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ranking', groupId, season] });
+      setKickTarget(null);
+    },
   });
 
   const feats = settings?.enabledFeatures ?? [];
@@ -231,7 +235,7 @@ export default function GroupTab() {
         matches={matchdayEntry?.matches}
         myMatches={matchdayMap.get(user?.id ?? '')?.matches}
         onPress={goToProfile}
-        onKick={canKick ? () => kick(item.user.id) : undefined}
+        onKick={canKick ? () => setKickTarget({ id: item.user.id, alias: item.user.alias }) : undefined}
       />
     );
   }, [rankingData, seasonRanking, seasonMap, matchdayMap, groupId, season, isGroupAdmin, user?.id, debtMap, rankingView, matchday, kick]);
@@ -327,6 +331,25 @@ export default function GroupTab() {
           </Button>
         </View>
       </Surface>
+
+      <Portal>
+        <Dialog visible={!!kickTarget} onDismiss={() => setKickTarget(null)}>
+          <Dialog.Title>Expulsar a {kickTarget?.alias}</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium">
+              {kickTarget?.alias} dejará de contar en el ranking mientras no sea miembro.
+              Su historial de predicciones y puntos no se borra — si lo añades de nuevo a la
+              peña, lo recupera todo. ¿Seguro que quieres expulsarlo?
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setKickTarget(null)}>Cancelar</Button>
+            <Button textColor={colors.debt} onPress={() => kickTarget && kick(kickTarget.id)}>
+              Expulsar
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
