@@ -20,12 +20,26 @@ export interface CardNote {
   delta: number | null;
 }
 
+export interface MatchBreakdown {
+  matchId: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeCrest?: string;
+  awayCrest?: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  predictedHome: number | null;
+  predictedAway: number | null;
+  isExact: boolean;
+}
+
 export interface RankingEntry {
   user: { id: string; alias: string; email: string };
   points: number;
   exactScores: number;
   debt: number;
   cardNotes: CardNote[];
+  matches: MatchBreakdown[];
 }
 
 export interface DebtEntry {

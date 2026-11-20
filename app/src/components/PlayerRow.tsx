@@ -1,10 +1,41 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Avatar, IconButton, Surface, Text } from 'react-native-paper';
 
 import { colors } from '@/config/theme';
-import { CardNote } from '@/api/penalties';
+import { CardNote, MatchBreakdown } from '@/api/penalties';
 
 const MEDAL_COLORS = ['#FFBE0B', '#C0C0C0', '#CD7F32'];
+
+function scoreLabel(home: number | null, away: number | null): string {
+  return home != null && away != null ? `${home}-${away}` : 'sin predicción';
+}
+
+// Un partido del desplegable de aciertos/fallos — la predicción del jugador seleccionado,
+// y debajo (si no eres tú mismo) la tuya propia para el mismo partido, para comparar.
+function MatchBreakdownRow({ match, mine }: { match: MatchBreakdown; mine?: MatchBreakdown }) {
+  const finished = match.homeScore != null;
+  return (
+    <View style={styles.breakdownMatch}>
+      <View style={styles.breakdownHeader}>
+        <Text variant="labelSmall" style={styles.breakdownTeams} numberOfLines={1}>
+          {match.homeTeam} vs {match.awayTeam}
+        </Text>
+        <Text variant="labelSmall" style={styles.breakdownRealScore}>
+          {finished ? `${match.homeScore}-${match.awayScore}` : 'pendiente'}
+        </Text>
+      </View>
+      <Text variant="labelSmall" style={[styles.breakdownPred, finished && (match.isExact ? styles.breakdownHit : styles.breakdownMiss)]}>
+        {finished ? (match.isExact ? '✓' : '✗') : '·'} {scoreLabel(match.predictedHome, match.predictedAway)}
+      </Text>
+      {mine && (
+        <Text variant="labelSmall" style={[styles.breakdownPred, styles.breakdownMine, finished && (mine.isExact ? styles.breakdownHit : styles.breakdownMiss)]}>
+          {finished ? (mine.isExact ? '✓' : '✗') : '·'} Tú: {scoreLabel(mine.predictedHome, mine.predictedAway)}
+        </Text>
+      )}
+    </View>
+  );
+}
 
 // Fila de jugador del ranking de una peña — siempre trae los 4 datos (puntos jornada/total,
 // deuda jornada/total): el par que toca según la vista activa se muestra grande, el otro
@@ -14,17 +45,19 @@ export function PlayerRow({
   alias, isMe, position, exactScores,
   rankingView, matchday,
   seasonPoints, matchdayPoints, seasonDebt, matchdayDebt,
-  cardNotes,
+  cardNotes, matches, myMatches,
   onPress, onKick,
 }: {
   alias: string; isMe: boolean; position: number; exactScores: number;
   rankingView: 'matchday' | 'season'; matchday: number;
   seasonPoints: number; matchdayPoints: number; seasonDebt: number; matchdayDebt: number;
-  cardNotes?: CardNote[];
+  cardNotes?: CardNote[]; matches?: MatchBreakdown[]; myMatches?: MatchBreakdown[];
   onPress: () => void; onKick?: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const medalColor = position <= 3 ? MEDAL_COLORS[position - 1] : undefined;
   const isMatchday = rankingView === 'matchday';
+  const myMatchById = new Map((myMatches ?? []).map((m) => [m.matchId, m]));
 
   const primaryPoints = isMatchday ? matchdayPoints : seasonPoints;
   const secondaryPointsLabel = isMatchday
@@ -35,7 +68,10 @@ export function PlayerRow({
   const secondaryDebt = isMatchday ? seasonDebt : matchdayDebt;
   const secondaryDebtLabel = isMatchday ? `${seasonDebt}€ en total` : `${matchdayDebt}€ en J${matchday}`;
 
+  const hasBreakdown = isMatchday && !!matches && matches.length > 0;
+
   return (
+    <View>
     <Pressable onPress={onPress} android_ripple={{ color: '#0001' }}>
       <Surface style={[styles.row, isMe && styles.rowMe]} elevation={isMe ? 2 : 1}>
         <View style={[styles.posBox, medalColor ? { backgroundColor: medalColor } : styles.posBoxDefault]}>
@@ -88,11 +124,29 @@ export function PlayerRow({
             <Text variant="labelSmall" style={styles.debtSecondary}>{secondaryDebtLabel}</Text>
           )}
         </View>
+        {hasBreakdown && (
+          <IconButton
+            icon={expanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            onPress={(e) => { e.stopPropagation?.(); setExpanded(!expanded); }}
+          />
+        )}
         {onKick && (
           <IconButton icon="account-remove" size={20} onPress={(e) => { e.stopPropagation?.(); onKick(); }} />
         )}
       </Surface>
     </Pressable>
+    {expanded && hasBreakdown && (
+      <View style={styles.breakdownPanel}>
+        <Text variant="labelMedium" style={styles.breakdownTitle}>
+          Partidos de {alias} en J{matchday}
+        </Text>
+        {matches!.map((m) => (
+          <MatchBreakdownRow key={m.matchId} match={m} mine={!isMe ? myMatchById.get(m.matchId) : undefined} />
+        ))}
+      </View>
+    )}
+    </View>
   );
 }
 
@@ -112,6 +166,19 @@ const styles = StyleSheet.create({
   cardNoteUp: { color: '#22C55E', opacity: 1 },
   cardNoteDown: { color: '#EF4444', opacity: 1 },
   rightCol: { alignItems: 'flex-end', gap: 0 },
+  breakdownPanel: {
+    marginTop: 4, padding: 10, borderRadius: 10, gap: 8,
+    backgroundColor: '#1A1F35',
+  },
+  breakdownTitle: { opacity: 0.6, marginBottom: 2 },
+  breakdownMatch: { gap: 2 },
+  breakdownHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  breakdownTeams: { flex: 1, opacity: 0.85 },
+  breakdownRealScore: { fontWeight: '700', opacity: 0.85 },
+  breakdownPred: { opacity: 0.7 },
+  breakdownMine: { opacity: 0.6 },
+  breakdownHit: { color: '#22C55E', opacity: 1 },
+  breakdownMiss: { color: '#EF4444', opacity: 1 },
   pointsPrimary: { fontWeight: '700' },
   pointsSecondary: { opacity: 0.45, marginBottom: 2 },
   debtPrimary: { color: colors.debt, fontWeight: '700' },
