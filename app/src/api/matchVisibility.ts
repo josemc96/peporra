@@ -6,6 +6,7 @@ interface VisibilityUserWithPoints extends VisibilityUser { points: number | nul
 export type MatchVisibility =
   | {
       phase: 'upcoming';
+      isPostponed: boolean;
       members: {
         user: VisibilityUser;
         hasPredicted: boolean;

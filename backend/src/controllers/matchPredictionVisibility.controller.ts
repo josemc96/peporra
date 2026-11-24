@@ -61,7 +61,10 @@ export async function getMatchPredictionVisibility(req: Request, res: Response):
     // Not predicted first, then predicted (revealed ones mixed in)
     members.sort((a, b) => Number(a.hasPredicted) - Number(b.hasPredicted));
 
-    res.json({ phase: 'upcoming', members });
+    // "postponed" ya no es editable aunque su startTime siga en el futuro (ver
+    // prediction.controller.ts) — el frontend usa este flag para no decir "Pendiente"
+    // (que insinúa que todavía se puede predecir) a quien no llegó a predecir a tiempo.
+    res.json({ phase: 'upcoming', isPostponed: match.status === 'postponed', members });
     return;
   }
 
