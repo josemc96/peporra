@@ -265,7 +265,11 @@ export default function MatchPredictionViewScreen() {
       {data?.phase === 'upcoming' && (
         <>
           <Text variant="titleSmall" style={styles.sectionTitle}>Predicciones de la peña</Text>
-          <Text variant="bodySmall" style={styles.hint}>Las predicciones se revelan cuando empiece el partido.</Text>
+          <Text variant="bodySmall" style={styles.hint}>
+            {data.isPostponed
+              ? 'Partido aplazado: ya no se puede predecir, a la espera de una fecha confirmada.'
+              : 'Las predicciones se revelan cuando empiece el partido.'}
+          </Text>
           <Divider style={styles.divider} />
           {data.members.map(({ user: u, hasPredicted, revealedPrediction }) => (
             <View key={u.id} style={styles.memberRow}>
@@ -282,6 +286,8 @@ export default function MatchPredictionViewScreen() {
                 </Text>
               ) : hasPredicted ? (
                 <Text variant="labelSmall" style={styles.predictedBadge}>✓ Predicho</Text>
+              ) : data.isPostponed ? (
+                <Text variant="labelSmall" style={styles.pendingBadge}>Sin predicción (aplazado)</Text>
               ) : (
                 <Text variant="labelSmall" style={styles.pendingBadge}>Pendiente</Text>
               )}
