@@ -52,13 +52,13 @@ function MatchCard({ match, prediction, season, groupId, multiplier, missingPred
 }) {
   const [showMissing, setShowMissing] = useState(false);
   const [showSpy, setShowSpy] = useState(false);
-  // Bloqueo por startTime, sin excepción para "postponed": en la práctica un partido
-  // aplazado/cancelado se queda con el startTime ORIGINAL (ya pasado) hasta que se confirma
-  // una fecha nueva (el sync lo devuelve entonces a 'pending' con el startTime ya actualizado
-  // a futuro, momento en el que se desbloquea de forma natural). Mantenerlo editable mientras
-  // sigue "postponed" con fecha antigua reabriría la predicción de una jornada ya en marcha.
+  // "postponed" SIEMPRE bloqueado, pase lo que pase con su startTime: la API puede asignarle
+  // una fecha provisional futura a un partido que sigue sin confirmar (sigue en
+  // CANCELLED/POSTPONED, no ha vuelto a SCHEDULED/TIMED) — fiarse del startTime en ese caso
+  // lo desbloquearía con una fecha que ni la propia API da por segura. Solo se desbloquea
+  // cuando el sync lo confirma de verdad y lo devuelve a 'pending'.
   const isPostponed = match.status === 'postponed';
-  const isLocked = new Date() >= new Date(match.startTime);
+  const isLocked = isPostponed || new Date() >= new Date(match.startTime);
   const hasPrediction = prediction !== undefined;
   const isFinished = match.status === 'finished';
   const isLive = isLocked && !isFinished;
